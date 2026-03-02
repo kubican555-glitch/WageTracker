@@ -3,46 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WageTracker Pro Max</title>
     
-    <!-- Skripty pro React a Tailwind -->
+    <title>WageTracker</title>
+    <meta name="apple-mobile-web-app-title" content="WageTracker">
+    
+    <!-- FAVICON: Modrá ikona s peněženkou -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%232563eb' /%3E%3Cpath d='M19 7h-1V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zm-1 6h-2a1 1 0 0 1 0-2h2v2z' fill='white' /%3E%3C/svg%3E">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%232563eb' /%3E%3Cpath d='M19 7h-1V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zm-1 6h-2a1 1 0 0 1 0-2h2v2z' fill='white' /%3E%3C/svg%3E">
+
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: {} }
+        }
+    </script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Spolehlivé ikony FontAwesome (Nahrazuje problémové Lucide) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Firebase SDK Compat -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-    <!-- Google Fonty -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
 
     <style>
-        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-        .dark { background-color: #020617; color: white; }
-        .animate-in { animation: fadeIn 0.3s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* NATIVE APP FEEL: Zákaz označování textu a kontextových menu */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            -webkit-tap-highlight-color: transparent; 
+            -webkit-touch-callout: none; 
+            -webkit-user-select: none; 
+            user-select: none; 
+        }
+        
+        input, select, textarea {
+            -webkit-user-select: auto !important;
+            user-select: auto !important;
+        }
+
+        .animate-in { animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         ::-webkit-scrollbar { display: none; }
         * { scrollbar-width: none; }
+
+        /* Zarovnání selectů pro iOS Safari */
+        select {
+            text-align-last: center;
+            text-align: center;
+        }
     </style>
 
     <script>
-        // Okamžitá aplikace tmavého režimu
         if (localStorage.getItem('shift-theme') === 'dark') {
             document.documentElement.classList.add('dark');
         }
     </script>
 </head>
-<body class="bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- TVÁ FIREBASE KONFIGURACE ---
+        // --- KONFIGURACE FIREBASE ---
         const firebaseConfig = {
           apiKey: "AIzaSyDI-epsVMbb2zD-akr72t5SLDoI6M7ieqY",
           authDomain: "wagetracker-cd4c4.firebaseapp.com",
@@ -58,9 +83,7 @@
             firebase.initializeApp(firebaseConfig);
             auth = firebase.auth();
             db = firebase.firestore();
-        } catch (e) {
-            console.error("Chyba při spouštění Firebase", e);
-        }
+        } catch (e) { console.error("Firebase init failed", e); }
 
         const { useState, useEffect, useMemo } = React;
 
@@ -69,7 +92,7 @@
                 '01-01': 'Nový rok', '05-01': 'Svátek práce', '05-08': 'Den vítězství',
                 '07-05': 'Cyril a Metoděj', '07-06': 'Jan Hus', '09-28': 'Státnost',
                 '10-28': 'Vznik ČSR', '11-17': 'Svoboda a demokracie', '12-24': 'Štědrý den',
-                '12-25': '1. vánoční', '12-26': '2. vánoční',
+                '12-25': '1. svátek vánoční', '12-26': '2. svátek vánoční',
             };
             const easter = { 2024: ['03-29', '04-01'], 2025: ['04-18', '04-21'], 2026: ['04-03', '04-06'] };
             const res = { ...holidays };
@@ -93,76 +116,109 @@
                 try {
                     const snap = await db.collection('profiles').doc(loginId).get();
                     if (snap.exists) onLoginSuccess(loginId, snap.data());
-                    else setError('Účet s tímto ID neexistuje.');
-                } catch (err) { setError('Chyba. Ujisti se, že máš ve Firebase nastavená pravidla (Rules).'); }
+                    else setError('Účet neexistuje. Zkus se zaregistrovat.');
+                } catch (err) { setError('Chyba spojení.'); }
                 setLoading(false);
             };
 
             const handleRegister = async (e) => {
                 e.preventDefault();
-                if (!firstName.trim() || !lastName.trim()) return setError('Vyplňte jméno a příjmení.');
+                if (!firstName.trim() || !lastName.trim()) return setError('Vyplň jméno a příjmení.');
                 setLoading(true); setError('');
                 try {
                     const newPin = Math.floor(10000000 + Math.random() * 90000000).toString();
                     const profile = { firstName: firstName.trim(), lastName: lastName.trim(), pin: newPin, createdAt: new Date().toISOString() };
                     await db.collection('profiles').doc(newPin).set(profile);
                     setGeneratedId(newPin); setView('success');
-                } catch (err) { setError('Chyba zápisu. Nastavil jsi Firebase Rules?'); console.error(err); }
+                } catch (err) { setError('Chyba zápisu.'); }
                 setLoading(false);
             };
 
             return (
                 <div className="min-h-screen flex flex-col items-center justify-center p-4">
-                    <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl p-8 border border-slate-100 dark:border-slate-800">
+                    <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl p-8 border border-slate-200 dark:border-slate-800">
                         <div className="flex flex-col items-center mb-8">
-                            <div className="bg-blue-600 p-4 rounded-3xl text-white shadow-xl mb-4 shadow-blue-200 dark:shadow-none">
+                            <div className="bg-blue-600 p-4 rounded-3xl text-white shadow-xl mb-4 shadow-blue-200 dark:shadow-none flex items-center justify-center w-16 h-16">
                                 <i className="fa-solid fa-wallet text-[32px]"></i>
                             </div>
-                            <h1 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">WageTracker</h1>
+                            <h1 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight italic">WageTracker</h1>
                         </div>
+                        
                         {error && (
-                            <div className="mb-6 p-4 bg-rose-50 text-rose-600 text-xs font-bold rounded-2xl flex gap-2 items-center">
-                                <i className="fa-solid fa-triangle-exclamation"></i> <span>{error}</span>
+                            <div className="mb-6 p-4 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-2xl flex gap-2 items-center">
+                                <i className="fa-solid fa-circle-exclamation"></i> <span>{error}</span>
                             </div>
                         )}
+                        
                         {view === 'login' && (
-                            <form onSubmit={handleLogin} className="space-y-5">
-                                <input type="text" name="username" autoComplete="username" value="Uživatel" className="hidden" readOnly />
+                            <form onSubmit={handleLogin} className="space-y-6">
+                                <input type="text" name="username" autoComplete="username" value="WageTracker Uživatel" className="hidden" readOnly />
                                 <div>
-                                    <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block text-center tracking-widest">Zadej své ID</label>
-                                    <input type="password" name="password" autoComplete="current-password" inputMode="numeric" pattern="[0-9]*" maxLength={8} required autoFocus
-                                        value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="• • • • • • • •"
-                                        className="w-full text-center tracking-[0.5em] text-2xl font-black p-5 bg-slate-50 dark:bg-slate-950 rounded-[2rem] border-none outline-none focus:ring-2 ring-blue-500 text-slate-800 dark:text-slate-100" />
+                                    <label className="text-[10px] font-black uppercase text-slate-400 mb-3 block text-center tracking-widest px-1">Tvé 8-místné ID</label>
+                                    
+                                    <div className="relative flex justify-between gap-1 w-full mt-2 group">
+                                        {[0,1,2,3,4,5,6,7].map(i => (
+                                            <div key={i} className={`w-9 h-14 flex items-center justify-center rounded-xl text-2xl font-black transition-all duration-200 ${
+                                                loginId.length === i 
+                                                ? 'ring-2 ring-blue-500 bg-white dark:bg-slate-800 scale-110 z-10 shadow-lg' 
+                                                : loginId.length > i 
+                                                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/50' 
+                                                    : 'bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-transparent'
+                                            }`}>
+                                                {/* Odcenzurovaný PIN: Zobrazí se reálné číslo */}
+                                                {loginId[i] ? loginId[i] : ''}
+                                            </div>
+                                        ))}
+                                        <input 
+                                            type="password" 
+                                            name="password" 
+                                            autoComplete="current-password" 
+                                            inputMode="numeric" 
+                                            pattern="[0-9]*" 
+                                            maxLength={8} 
+                                            required
+                                            value={loginId} 
+                                            onChange={e => setLoginId(e.target.value.replace(/\D/g, '').slice(0, 8))} 
+                                            className="absolute inset-0 w-full h-full opacity-0 text-transparent bg-transparent caret-transparent outline-none cursor-text z-20"
+                                            style={{ WebkitUserSelect: 'text' }}
+                                        />
+                                    </div>
                                 </div>
-                                <button type="submit" className="w-full bg-blue-600 text-white font-black py-5 rounded-3xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all">
+                                <button type="submit" className="w-full bg-blue-600 text-white font-black py-5 rounded-3xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all mt-4">
                                     {loading ? <i className="fa-solid fa-spinner fa-spin text-xl"></i> : <i className="fa-solid fa-shield-halved text-xl"></i>} PŘIHLÁSIT SE
                                 </button>
-                                <p className="text-center text-xs text-slate-500 mt-4">Nemáš ID? <button type="button" onClick={() => setView('register')} className="text-blue-600 font-bold underline">Zaregistruj se</button></p>
+                                <p className="text-center text-xs text-slate-500 mt-4">Nemáš ID? <button type="button" onClick={() => {setView('register'); setError('')}} className="text-blue-600 font-bold underline">Zaregistruj se</button></p>
                             </form>
                         )}
+                        
                         {view === 'register' && (
                             <form onSubmit={handleRegister} className="space-y-4">
-                                <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Jméno" className="w-full font-black p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border-none outline-none focus:ring-2 ring-blue-500 text-slate-800 dark:text-slate-100" required />
-                                <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Příjmení" className="w-full font-black p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border-none outline-none focus:ring-2 ring-blue-500 text-slate-800 dark:text-slate-100" required />
-                                <button type="submit" className="w-full bg-slate-800 dark:bg-white text-white dark:text-slate-900 font-black py-5 rounded-3xl shadow-xl flex items-center justify-center gap-2 active:scale-95">
+                                <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Jméno" className="w-full font-black p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border-none outline-none focus:ring-2 ring-blue-500 text-slate-800 dark:text-slate-100 shadow-sm" required />
+                                <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Příjmení" className="w-full font-black p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border-none outline-none focus:ring-2 ring-blue-500 text-slate-800 dark:text-slate-100 shadow-sm" required />
+                                <button type="submit" className="w-full bg-slate-800 dark:bg-white text-white dark:text-slate-900 font-black py-5 rounded-3xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all mt-4">
                                     {loading ? <i className="fa-solid fa-spinner fa-spin text-xl"></i> : 'VYTVOŘIT ÚČET'}
                                 </button>
-                                <p className="text-center text-xs text-slate-500 mt-4">Máš ID? <button type="button" onClick={() => setView('login')} className="text-blue-600 font-bold underline">Přihlas se</button></p>
+                                <p className="text-center text-xs text-slate-500 mt-4">Máš ID? <button type="button" onClick={() => {setView('login'); setError('')}} className="text-blue-600 font-bold underline">Přihlas se</button></p>
                             </form>
                         )}
+                        
                         {view === 'success' && (
-                            <div className="animate-in zoom-in duration-500 flex flex-col items-center text-center">
+                            <div className="animate-in zoom-in duration-500 flex flex-col items-center text-center w-full">
                                 <i className="fa-solid fa-circle-check text-5xl text-emerald-500 mb-4"></i>
                                 <h2 className="text-xl font-black text-slate-800 dark:text-white mb-2">Úspěch!</h2>
-                                <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl w-full border border-slate-200 dark:border-slate-800 mb-6">
-                                    <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Tvé unikátní ID</p>
-                                    <p className="text-4xl tracking-[0.2em] font-black text-blue-600">{generatedId}</p>
+                                <p className="text-[10px] font-black uppercase text-slate-400 mb-3 mt-4 tracking-widest">Tvé unikátní ID</p>
+                                <div className="flex gap-1 justify-center mb-8 w-full">
+                                    {generatedId.split('').map((char, i) => (
+                                        <div key={i} className="w-9 h-14 flex items-center justify-center rounded-xl text-2xl font-black bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/50 shadow-sm">
+                                            {char}
+                                        </div>
+                                    ))}
                                 </div>
-                                <p className="text-[10px] text-slate-400 mb-6 italic">Nyní klikni na pokračovat a telefon ti nabídne uložení do hesel.</p>
-                                <form onSubmit={(e) => { e.preventDefault(); onLoginSuccess(generatedId, { firstName, lastName }); }}>
+                                <p className="text-[10px] text-slate-400 mb-6 italic px-2 leading-relaxed">Po kliknutí ti telefon nabídne uložení ID do hesel. Potvrď to, ať se příště přihlásíš přes FaceID.</p>
+                                <form onSubmit={(e) => { e.preventDefault(); onLoginSuccess(generatedId, { firstName, lastName }); }} className="w-full">
                                     <input type="text" name="username" autoComplete="username" value={`${firstName} ${lastName}`} className="hidden" readOnly />
                                     <input type="password" name="password" autoComplete="new-password" value={generatedId} className="hidden" readOnly />
-                                    <button type="submit" className="w-full bg-blue-600 text-white font-black py-5 rounded-3xl shadow-xl active:scale-95 tracking-widest uppercase">POKRAČOVAT</button>
+                                    <button type="submit" className="w-full bg-blue-600 text-white font-black py-5 rounded-3xl shadow-xl active:scale-95 tracking-widest uppercase transition-all">POKRAČOVAT</button>
                                 </form>
                             </div>
                         )}
@@ -193,21 +249,17 @@
                 discounts: { taxpayer: 2570, kids: 0 }
             });
 
+            const contractLabels = { 'HPP': 'Pracovní poměr (HPP)', 'DPČ': 'Dohoda DPČ', 'DPP': 'Dohoda DPP' };
+
             useEffect(() => {
-                if (!auth) return setGlobalError('Nepodařilo se spustit Firebase.');
+                if (!auth) return setGlobalError('Firebase selhal.');
                 auth.signInAnonymously().then(() => {
                     if (activePin) {
-                        db.collection('profiles').doc(activePin).get().then(s => {
-                            if (s.exists) setProfileName(`${s.data().firstName} ${s.data().lastName}`);
-                        });
-                        db.collection('settings').doc(activePin).get().then(s => {
-                            if (s.exists) setSettings(prev => ({ ...prev, ...s.data() }));
-                        });
+                        db.collection('profiles').doc(activePin).get().then(s => { if (s.exists) setProfileName(`${s.data().firstName} ${s.data().lastName}`); });
+                        db.collection('settings').doc(activePin).get().then(s => { if (s.exists) setSettings(prev => ({ ...prev, ...s.data() })); });
                         db.collection(`shifts_${activePin}`).onSnapshot(snap => {
                             const data = {}; snap.forEach(d => data[d.id] = d.data()); setShifts(data);
-                        }, err => {
-                            setGlobalError('Zkontroluj Firebase Rules. Odepřen přístup.');
-                        });
+                        }, err => { setGlobalError('Chyba databáze.'); });
                     }
                     setIsInitializing(false);
                 }).catch(e => { setGlobalError(e.message); setIsInitializing(false); });
@@ -224,8 +276,7 @@
             };
 
             const handleLoginSuccess = (pin, pData) => {
-                localStorage.setItem('wage-tracker-pin', pin);
-                setActivePin(pin);
+                localStorage.setItem('wage-tracker-pin', pin); setActivePin(pin);
                 if (pData) setProfileName(`${pData.firstName} ${pData.lastName}`);
             };
 
@@ -238,16 +289,13 @@
             const startOffset = (new Date(year, month, 1).getDay() + 6) % 7;
 
             const calculateShiftDetails = (startMin, endMin, customBreak, rate, dateStr, type, fixedHours) => {
-                if (type !== 'work') {
-                    return { type, netMinutes: fixedHours * 60, base: fixedHours * rate, gross: type === 'vacation' ? fixedHours * rate : fixedHours * rate * 0.6, breakMinutes: 0, raw: `${fixedHours}h`, nBonus: 0, wBonus: 0, hBonus: 0 };
-                }
+                if (type !== 'work') return { type, netMinutes: fixedHours * 60, base: fixedHours * rate, gross: type === 'vacation' ? fixedHours * rate : fixedHours * rate * 0.6, breakMinutes: 0, raw: `${fixedHours}h`, nBonus: 0, wBonus: 0, hBonus: 0 };
                 let diff = endMin - startMin; if (diff < 0) diff += 1440;
                 let breakMins = customBreak !== '' ? parseInt(customBreak) : (diff > 360 ? 30 : 0);
                 let net = Math.max(0, diff - breakMins);
                 const dObj = new Date(dateStr); const isWk = [0, 6].includes(dObj.getDay());
                 const isHol = !!holidays[`${String(month+1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`];
-                let rawNightMins = 0;
-                for (let i = 0; i < diff; i++) { const cur = (startMin + i) % 1440; if (cur >= 1320 || cur < 360) rawNightMins++; }
+                let rawNightMins = 0; for (let i = 0; i < diff; i++) { const cur = (startMin + i) % 1440; if (cur >= 1320 || cur < 360) rawNightMins++; }
                 const nightMinutes = Math.max(0, rawNightMins - (rawNightMins / Math.max(1, diff) * breakMins));
                 const base = (net / 60) * rate;
                 const nB = (nightMinutes / 60) * rate * (settings.bonuses.night / 100);
@@ -278,29 +326,20 @@
                     if (s.type === 'sick') sickW += s.gross; else if (s.type === 'vacation') vacW += s.gross;
                     else { nB += (s.nBonus||0); wB += (s.wBonus||0); hB += (s.hBonus||0); baseW += (s.base||0); }
                 });
-                let totalSoc = 0, totalZdra = 0, totalTax = 0, totalGross = 0;
+                let totalSoc = 0, totalZdra = 0, rawTax = 0, totalGross = 0;
                 Object.keys(groups).forEach(t => {
                     const g = groups[t]; if (g.gross <= 0) return; totalGross += g.gross;
-                    if (t === 'HPP') { totalSoc += g.gross * 0.071; totalZdra += g.gross * 0.045; totalTax += (Math.ceil(g.gross/100)*100)*0.15; }
-                    else if (t === 'DPP' && g.gross > 10500) { totalSoc += g.gross * 0.071; totalZdra += g.gross * 0.045; totalTax += g.gross*0.15; }
-                    else if (t === 'DPČ' && g.gross >= 4000) { totalSoc += g.gross * 0.071; totalZdra += g.gross * 0.045; totalTax += g.gross*0.15; }
-                    else totalTax += g.gross*0.15;
+                    if (t === 'HPP') { totalSoc += g.gross * 0.071; totalZdra += g.gross * 0.045; rawTax += (Math.ceil(g.gross/100)*100)*0.15; }
+                    else if (t === 'DPP' && g.gross > 10500) { totalSoc += g.gross * 0.071; totalZdra += g.gross * 0.045; rawTax += g.gross*0.15; }
+                    else if (t === 'DPČ' && g.gross >= 4000) { totalSoc += g.gross * 0.071; totalZdra += g.gross * 0.045; rawTax += g.gross*0.15; }
+                    else rawTax += g.gross*0.15;
                 });
                 const sleva = Number(settings.discounts.taxpayer) + Number(settings.discounts.kids);
-                totalTax = Math.max(0, totalTax - sleva);
-                return { list, gross: totalGross, net: totalGross - totalSoc - totalZdra - totalTax, soc: totalSoc, zdra: totalZdra, tax: totalTax, sleva, bonuses: { night: nB, weekend: wB, holiday: hB, base: baseW, sick: sickW, vacation: vacW }, actualHrs: list.reduce((a,b)=>a+b.netMinutes,0)/60 };
+                const finalTax = Math.max(0, rawTax - sleva);
+                return { list, gross: totalGross, net: totalGross - totalSoc - totalZdra - finalTax, soc: totalSoc, zdra: totalZdra, rawTax: rawTax, appliedDiscount: Math.min(rawTax, sleva), sleva, bonuses: { night: nB, weekend: wB, holiday: hB, base: baseW, sick: sickW, vacation: vacW }, actualHrs: list.reduce((a,b)=>a+b.netMinutes,0)/60 };
             }, [shifts, month, year, settings]);
 
-            const exportToCSV = () => {
-                let csv = "Datum,Typ,Smlouva,Cas,Pauza_min,Hodiny_ciste,Sazba_Kc,Hruba_Mzda_Kc\n";
-                Object.keys(shifts).sort().forEach(k => {
-                    const s = shifts[k]; const typeStr = s.type === 'vacation' ? 'Dovolená' : s.type === 'sick' ? 'Nemoc' : 'Práce';
-                    csv += `${k},${typeStr},${s.contractType || '-'},${s.raw || '-'},${s.breakMinutes || 0},${(s.netMinutes/60).toFixed(2)},${s.rate},${Math.round(s.gross)}\n`;
-                });
-                const blob = new Blob(["\uFEFF"+csv], { type: 'text/csv;charset=utf-8;' });
-                const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `Vykaz_${year}_${month+1}.csv`;
-                document.body.appendChild(link); link.click(); document.body.removeChild(link);
-            };
+            const formatHrs = (m) => `${(m/60).toLocaleString('cs-CZ', {maximumFractionDigits: 1})}h`;
 
             const openEditor = (dateStr) => {
                 const s = shifts[dateStr]; setEditingDate(dateStr);
@@ -311,7 +350,7 @@
             if (isInitializing) return (
                 <div className="min-h-screen flex flex-col items-center justify-center dark:bg-slate-950 transition-colors duration-500">
                     <i className="fa-solid fa-spinner fa-spin text-[40px] text-blue-600 mb-4"></i>
-                    <h2 className="text-xl font-black text-slate-800 dark:text-white">WageTracker</h2>
+                    <h2 className="text-xl font-black text-slate-800 dark:text-white italic">WageTracker</h2>
                 </div>
             );
 
@@ -321,46 +360,46 @@
                 <div className="max-w-md mx-auto p-4 pb-24 animate-in">
                     <header className="flex justify-between items-center mb-6">
                         <div className="flex items-center gap-3">
-                            <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-200 dark:shadow-none"><i className="fa-solid fa-wallet text-xl"></i></div>
-                            <div><h1 className="text-xl font-black">WageTracker</h1><p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1 leading-none">Moje výplata</p></div>
+                            <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-200 dark:shadow-none w-10 h-10 flex items-center justify-center"><i className="fa-solid fa-wallet text-xl"></i></div>
+                            <div><h1 className="text-xl font-black italic tracking-tight">WageTracker</h1><p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1 leading-none">Moje výplata</p></div>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={exportToCSV} className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-blue-600 active:scale-95 shadow-sm transition-transform"><i className="fa-solid fa-download text-lg"></i></button>
-                            <button onClick={() => setActiveTab('settings')} className={`p-2 rounded-xl border border-slate-200 dark:border-slate-800 active:scale-95 shadow-sm transition-transform ${activeTab === 'settings' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-900'}`}><i className="fa-solid fa-gear text-lg"></i></button>
-                        </div>
+                        <button onClick={() => setActiveTab('settings')} className={`p-2 rounded-xl border border-slate-200 dark:border-slate-800 active:scale-95 shadow-sm transition-transform ${activeTab === 'settings' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-900'}`}><i className="fa-solid fa-gear text-lg"></i></button>
                     </header>
 
                     {activeTab === 'calendar' && (
                         <div className="space-y-4">
                             <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                                <button onClick={() => setCurrentDate(new Date(year, month-1))} className="p-2 active:scale-90 transition-transform"><i className="fa-solid fa-chevron-left text-xl"></i></button>
-                                <span className="font-black text-sm uppercase">{new Intl.DateTimeFormat('cs-CZ', {month:'long', year:'numeric'}).format(currentDate)}</span>
-                                <button onClick={() => setCurrentDate(new Date(year, month+1))} className="p-2 active:scale-90 transition-transform"><i className="fa-solid fa-chevron-right text-xl"></i></button>
+                                <button onClick={() => setCurrentDate(new Date(year, month-1))} className="p-2 active:scale-90 transition-transform"><i className="fa-solid fa-chevron-left text-xl text-slate-400"></i></button>
+                                <span className="font-black text-sm uppercase tracking-tighter">{new Intl.DateTimeFormat('cs-CZ', {month:'long', year:'numeric'}).format(currentDate)}</span>
+                                <button onClick={() => setCurrentDate(new Date(year, month+1))} className="p-2 active:scale-90 transition-transform"><i className="fa-solid fa-chevron-right text-xl text-slate-400"></i></button>
                             </div>
                             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
                                 <div className="grid grid-cols-7 bg-slate-50/50 dark:bg-slate-800/30">
                                     {['Po','Út','St','Čt','Pá','So','Ne'].map(d => <div key={d} className="py-3 text-center text-[9px] font-black text-slate-400 uppercase">{d}</div>)}
                                 </div>
                                 <div className="grid grid-cols-7">
-                                    {Array.from({ length: startOffset }).map((_, i) => <div key={i} className="h-14 bg-slate-50/10 dark:bg-slate-950/20 border-b border-r border-slate-50 dark:border-slate-800" />)}
+                                    {Array.from({ length: startOffset }).map((_, i) => <div key={`empty-${i}`} className="h-16 bg-slate-50/10 dark:bg-slate-950/20 border-b border-r border-slate-100 dark:border-slate-800" />)}
                                     {Array.from({ length: daysInMonth }).map((_, i) => {
-                                        const d = i + 1; const ds = `${year}-${String(month+1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                                        const s = shifts[ds]; const isT = new Date().toDateString() === new Date(year, month, d).toDateString();
+                                        const d = i + 1;
+                                        const today = new Date();
+                                        const isT = today.getDate() === d && today.getMonth() === month && today.getFullYear() === year;
+                                        
+                                        // OPRAVA: Unikátny key pre každý render, zabráni preblikávaniu CSS animácie pri zmene mesiaca
+                                        const ds = `${year}-${String(month+1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                                        
+                                        const s = shifts[ds];
                                         const hol = holidays[`${String(month+1).padStart(2, '0')}-${String(d).padStart(2, '0')}`];
                                         const isWk = [0,6].includes(new Date(year, month, d).getDay());
                                         let bg = '', txt = 'text-slate-400 dark:text-slate-600';
-                                        if (s) {
-                                            if (s.type==='vacation') { bg='bg-emerald-50/50 dark:bg-emerald-900/20'; txt='text-emerald-600'; }
-                                            else if (s.type==='sick') { bg='bg-orange-50/50 dark:bg-orange-900/20'; txt='text-orange-600'; }
-                                            else { bg='bg-blue-50/30 dark:bg-blue-900/10'; txt='text-blue-600'; }
-                                        } else if (hol) { bg='bg-rose-50/40 dark:bg-rose-900/20'; txt='text-rose-500'; }
-                                        else if (isWk) { bg='bg-amber-50/30 dark:bg-amber-900/10'; txt='text-amber-600'; }
+                                        if (s) { if (s.type==='vacation') { bg='bg-emerald-50/50 dark:bg-emerald-900/20'; txt='text-emerald-600'; } else if (s.type==='sick') { bg='bg-orange-50/50 dark:bg-orange-900/20'; txt='text-orange-600'; } else { bg='bg-blue-50/30 dark:bg-blue-900/10'; txt='text-blue-600'; } } 
+                                        else if (hol) { bg='bg-rose-50/40 dark:bg-rose-900/20'; txt='text-rose-500'; } else if (isWk) { bg='bg-amber-50/30 dark:bg-amber-900/10'; txt='text-amber-600'; }
                                         return (
-                                            <div key={d} onClick={() => { openEditor(ds); }} className={`h-14 flex flex-col items-center justify-center border-b border-r border-slate-50 dark:border-slate-800 cursor-pointer active:scale-90 relative transition-all ${bg} ${isT ? 'ring-2 ring-inset ring-blue-500' : ''}`}>
+                                            <div key={ds} onClick={() => { setEditingDate(ds); setEditorType(s?.type || 'work'); setInputValue(s?.type === 'work' ? s.raw : ''); setRateValue(s?.rate || settings.defaultRate); setShiftContract(s?.contractType || settings.defaultContract); }} className={`h-16 flex flex-col items-center justify-start py-1 border-b border-r border-slate-100 dark:border-slate-800 cursor-pointer active:scale-90 relative transition-all ${bg} ${isT ? 'ring-2 ring-inset ring-blue-500' : ''}`}>
                                                 <span className={`text-[10px] font-black ${txt}`}>{d}</span>
-                                                {s?.type==='work' && <div className="flex gap-0.5 mt-0.5 scale-[0.6]">{s.nBonus>0 && <i className="fa-solid fa-bolt text-[10px] text-indigo-400"></i>}{s.wBonus>0 && <i className="fa-solid fa-star text-[10px] text-amber-500"></i>}{s.hBonus>0 && <i className="fa-solid fa-champagne-glasses text-[10px] text-rose-500"></i>}</div>}
+                                                {s?.type==='work' && <div className="flex gap-0.5 mt-0.5 scale-[0.6]">{s.nBonus>0 && <i className="fa-solid fa-bolt text-indigo-400"></i>}{s.wBonus>0 && <i className="fa-solid fa-star text-amber-500"></i>}{s.hBonus>0 && <i className="fa-solid fa-champagne-glasses text-rose-500"></i>}</div>}
                                                 {s?.type === 'vacation' && <i className="fa-solid fa-umbrella text-[10px] text-emerald-500 mt-1"></i>}
                                                 {s?.type === 'sick' && <i className="fa-solid fa-capsules text-[10px] text-orange-500 mt-1"></i>}
+                                                {s && <span className={`text-[9px] font-black mt-auto leading-none pb-0.5 ${s.type === 'vacation' ? 'text-emerald-600' : s.type === 'sick' ? 'text-orange-600' : 'text-slate-500 dark:text-slate-400'}`}>{formatHrs(s.netMinutes)}</span>}
                                             </div>
                                         );
                                     })}
@@ -371,7 +410,7 @@
 
                     {activeTab === 'list' && (
                         <div className="space-y-3">
-                            <h2 className="font-black text-xs uppercase text-slate-400 mb-4 px-2 tracking-widest flex justify-between items-center">Mé směny <span>{monthlyData.list.length}</span></h2>
+                            <h2 className="font-black text-xs uppercase text-slate-400 mb-4 px-2 tracking-widest flex justify-between items-center">Moje směny <span>{monthlyData.list.length}</span></h2>
                             {monthlyData.list.map(s => (
                                 <div key={s.date} onClick={() => { openEditor(s.date); }} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col gap-3 active:scale-95 shadow-sm transition-transform">
                                     <div className="flex items-center justify-between">
@@ -380,7 +419,7 @@
                                                 <span className="text-[8px] font-black leading-none uppercase">{new Intl.DateTimeFormat('cs-CZ', {weekday:'short'}).format(new Date(s.date))}</span>
                                                 <span className="text-sm font-black">{new Date(s.date).getDate()}</span>
                                             </div>
-                                            <div><div className="flex items-center gap-2"><p className="font-black text-xs">{s.type==='vacation'?'Dovolená':s.type==='sick'?'Nemocenská':s.raw}</p><span className="text-[8px] px-1 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded font-black">{s.contractType}</span></div><p className="text-[9px] font-bold text-slate-400 uppercase">{(s.netMinutes/60).toFixed(2)}h • {s.rate} Kč/h</p></div>
+                                            <div><div className="flex items-center gap-2"><p className="font-black text-xs">{s.type==='vacation'?'Dovolená':s.type==='sick'?'Nemocenská':s.raw}</p><span className="text-[8px] px-1 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded font-black">{s.contractType}</span></div><p className="text-[9px] font-bold text-slate-400 uppercase">{formatHrs(s.netMinutes)} • {s.rate} Kč/h</p></div>
                                         </div>
                                         <p className="text-xs font-black">{Math.round(s.gross).toLocaleString()} Kč</p>
                                     </div>
@@ -403,11 +442,12 @@
                                 <h2 className="text-4xl font-black text-center">{Math.round(monthlyData.net).toLocaleString()} Kč</h2>
                                 <div className="grid grid-cols-2 gap-4 mt-6 bg-blue-700/40 p-4 rounded-2xl">
                                     <div className="text-center"><p className="text-[8px] font-black uppercase text-blue-200">Hrubá</p><p className="text-lg font-black">{Math.round(monthlyData.gross).toLocaleString()} Kč</p></div>
-                                    <div className="text-center"><p className="text-[8px] font-black uppercase text-blue-200">Hodin</p><p className="text-lg font-black">{monthlyData.actualHrs.toFixed(1)}h</p></div>
+                                    <div className="text-center"><p className="text-[8px] font-black uppercase text-blue-200">Hodin</p><p className="text-lg font-black">{formatHrs(monthlyData.actualHrs*60)}</p></div>
                                 </div>
                             </div>
+                            
                             <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm opacity-90">
-                                <h3 className="font-black text-[10px] uppercase text-slate-400 border-b dark:border-slate-800 pb-2 text-center">Rozbor příjmů</h3>
+                                <h3 className="font-black text-[10px] uppercase text-slate-400 border-b dark:border-slate-800 pb-2 text-center tracking-widest px-1">Složení mzdy</h3>
                                 <div className="space-y-2">
                                     {monthlyData.bonuses.base > 0 && <div className="flex justify-between text-sm"><span>Základní mzda</span><span className="font-black">{Math.round(monthlyData.bonuses.base).toLocaleString()} Kč</span></div>}
                                     {monthlyData.bonuses.night > 0 && <div className="flex justify-between text-sm"><span className="text-indigo-500">Příplatek Noc</span><span className="font-black text-emerald-500">+{Math.round(monthlyData.bonuses.night).toLocaleString()} Kč</span></div>}
@@ -415,7 +455,16 @@
                                     {monthlyData.bonuses.holiday > 0 && <div className="flex justify-between text-sm"><span className="text-rose-500">Příplatek Svátek</span><span className="font-black text-emerald-500">+{Math.round(monthlyData.bonuses.holiday).toLocaleString()} Kč</span></div>}
                                     {monthlyData.bonuses.vacation > 0 && <div className="flex justify-between text-sm"><span className="text-emerald-500">Dovolená</span><span className="font-black text-emerald-500">+{Math.round(monthlyData.bonuses.vacation).toLocaleString()} Kč</span></div>}
                                     {monthlyData.bonuses.sick > 0 && <div className="flex justify-between text-sm"><span className="text-orange-500">Nemocenská</span><span className="font-black text-emerald-500">+{Math.round(monthlyData.bonuses.sick).toLocaleString()} Kč</span></div>}
-                                    <div className="flex justify-between text-sm pt-2 border-t dark:border-slate-800"><span className="text-slate-400 font-bold text-xs uppercase">Odvody a daně</span><span className="font-black text-rose-500">-{Math.round(monthlyData.gross - monthlyData.net).toLocaleString()} Kč</span></div>
+                                </div>
+                            </div>
+
+                            <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm opacity-90">
+                                <h3 className="font-black text-[10px] uppercase text-slate-400 border-b dark:border-slate-800 pb-2 text-center tracking-widest px-1">Srážky a daně</h3>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400"><span>Sociální poj. (7,1 %)</span><span className="font-black text-rose-500">-{Math.round(monthlyData.soc).toLocaleString()} Kč</span></div>
+                                    <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400"><span>Zdravotní poj. (4,5 %)</span><span className="font-black text-rose-500">-{Math.round(monthlyData.zdra).toLocaleString()} Kč</span></div>
+                                    <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400"><span>Záloha na daň (15 %)</span><span className="font-black text-rose-500">-{Math.round(monthlyData.rawTax).toLocaleString()} Kč</span></div>
+                                    {monthlyData.appliedDiscount > 0 && <div className="flex justify-between text-sm mt-2 pt-2 border-t border-dashed dark:border-slate-800"><span className="text-emerald-600 dark:text-emerald-400 font-bold">Uplatněná sleva</span><span className="font-black text-emerald-500">+{Math.round(monthlyData.appliedDiscount).toLocaleString()} Kč</span></div>}
                                 </div>
                             </div>
                         </div>
@@ -425,52 +474,58 @@
                         <div className="space-y-6">
                             <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-6 shadow-sm flex items-center justify-between border border-slate-200 dark:border-slate-800">
                                 <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full flex items-center justify-center font-black">
-                                        <i className="fa-solid fa-user text-2xl"></i>
-                                    </div>
+                                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full flex items-center justify-center font-black"><i className="fa-solid fa-user text-2xl"></i></div>
                                     <div><h3 className="font-black">{profileName || 'Uživatel'}</h3><p className="text-[10px] font-bold text-slate-400 mt-1 tracking-widest leading-none">ID: {activePin}</p></div>
                                 </div>
                                 <button onClick={handleLogout} className="p-3 bg-rose-50 text-rose-500 rounded-xl active:scale-90 transition-transform"><i className="fa-solid fa-right-from-bracket text-lg"></i></button>
                             </div>
                             <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-6 space-y-6 border border-slate-200 dark:border-slate-800 shadow-sm">
                                 <div><label className="text-[10px] font-black text-slate-400 block mb-2 text-center uppercase tracking-widest">Výchozí hodinovka</label><input type="number" value={settings.defaultRate} onChange={e => saveSettings({...settings, defaultRate: parseFloat(e.target.value)||0})} className="w-full bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl font-black outline-none text-center" /></div>
-                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 text-center uppercase tracking-widest">Výchozí smlouva</label><select value={settings.defaultContract} onChange={e => saveSettings({...settings, defaultContract: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl font-black outline-none text-center appearance-none cursor-pointer"><option value="HPP">Pracovní poměr (HPP)</option><option value="DPČ">Dohoda DPČ</option><option value="DPP">Dohoda DPP</option></select></div>
+                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 text-center uppercase tracking-widest">Výchozí smlouva</label>
+                                    <div className="relative w-full bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl flex justify-center items-center"><span className="font-black text-slate-900 dark:text-slate-100 absolute pointer-events-none">{contractLabels[settings.defaultContract] || settings.defaultContract}</span>
+                                        <select value={settings.defaultContract} onChange={e => saveSettings({...settings, defaultContract: e.target.value})} className="w-full h-full opacity-0 cursor-pointer text-center"><option value="HPP">Pracovní poměr (HPP)</option><option value="DPČ">Dohoda DPČ</option><option value="DPP">Dohoda DPP</option></select>
+                                    </div>
+                                </div>
                                 <div className="flex items-center justify-between pt-4 border-t dark:border-slate-800"><span className="text-xs font-black uppercase text-slate-400 tracking-widest">Tmavý režim</span><button onClick={() => saveSettings({ ...settings, isDark: !settings.isDark })} className={`w-14 h-8 rounded-full relative transition-all ${settings.isDark ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-800'}`}><div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow transition-all ${settings.isDark ? 'left-7' : 'left-1'}`} /></button></div>
                             </div>
                         </div>
                     )}
 
                     <nav className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-950/90 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-8 py-5 flex justify-between items-center z-50">
-                        <button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center gap-1 transition-transform ${activeTab==='calendar'?'text-blue-600 scale-110':'text-slate-400'}`}><i className="fa-solid fa-calendar-days text-xl"></i><span className="text-[8px] font-black uppercase">Kalendář</span></button>
-                        <button onClick={() => setActiveTab('list')} className={`flex flex-col items-center gap-1 transition-transform ${activeTab==='list'?'text-blue-600 scale-110':'text-slate-400'}`}><i className="fa-solid fa-list text-xl"></i><span className="text-[8px] font-black uppercase">Směny</span></button>
-                        <button onClick={() => setActiveTab('payslip')} className={`flex flex-col items-center gap-1 transition-transform ${activeTab==='payslip'?'text-blue-600 scale-110':'text-slate-400'}`}><i className="fa-solid fa-file-invoice-dollar text-xl"></i><span className="text-[8px] font-black uppercase">Výplata</span></button>
+                        <button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center gap-1 transition-transform ${activeTab==='calendar'?'text-blue-600 scale-110':'text-slate-400'}`}><i className="fa-solid fa-calendar-days text-xl"></i><span className="text-[8px] font-black uppercase tracking-tighter">Kalendář</span></button>
+                        <button onClick={() => setActiveTab('list')} className={`flex flex-col items-center gap-1 transition-transform ${activeTab==='list'?'text-blue-600 scale-110':'text-slate-400'}`}><i className="fa-solid fa-list text-xl"></i><span className="text-[8px] font-black uppercase tracking-tighter">Směny</span></button>
+                        <button onClick={() => setActiveTab('payslip')} className={`flex flex-col items-center gap-1 transition-transform ${activeTab==='payslip'?'text-blue-600 scale-110':'text-slate-400'}`}><i className="fa-solid fa-file-invoice-dollar text-xl"></i><span className="text-[8px] font-black uppercase tracking-tighter">Výplata</span></button>
                     </nav>
 
                     {editingDate && (
                         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[100] flex items-end justify-center">
                             <div className="bg-white dark:bg-slate-900 w-full rounded-t-[3.5rem] p-6 pb-12 shadow-2xl animate-in slide-in-from-bottom-full duration-300 max-w-lg">
                                 <div className="flex justify-between items-center mb-6 px-2">
-                                    <div><h3 className="text-xl font-black">{new Date(editingDate).toLocaleDateString('cs-CZ', {day:'numeric', month:'long'})}</h3><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{new Intl.DateTimeFormat('cs-CZ', {weekday:'long'}).format(new Date(editingDate))}</p></div>
+                                    <div><h3 className="text-xl font-black">{new Date(editingDate).toLocaleDateString('cs-CZ', {day:'numeric', month:'long'})}</h3><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Intl.DateTimeFormat('cs-CZ', {weekday:'long'}).format(new Date(editingDate))}</p></div>
                                     <button onClick={() => setEditingDate(null)} className="p-3 bg-slate-100 dark:bg-slate-800 rounded-full active:scale-90"><i className="fa-solid fa-xmark text-xl"></i></button>
                                 </div>
                                 <div className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl mb-6">
-                                    <button onClick={() => setEditorType('work')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${editorType==='work'?'bg-white dark:bg-slate-700 text-blue-600 shadow':'text-slate-400'}`}><i className="fa-solid fa-briefcase text-sm inline mr-1 mb-0.5"></i> Práce</button>
-                                    <button onClick={() => setEditorType('vacation')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${editorType==='vacation'?'bg-white dark:bg-slate-700 text-emerald-600 shadow':'text-slate-400'}`}><i className="fa-solid fa-umbrella text-sm inline mr-1 mb-0.5"></i> Dovča</button>
-                                    <button onClick={() => setEditorType('sick')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${editorType==='sick'?'bg-white dark:bg-slate-700 text-orange-600 shadow':'text-slate-400'}`}><i className="fa-solid fa-capsules text-sm inline mr-1 mb-0.5"></i> Nemoc</button>
+                                    <button onClick={() => setEditorType('work')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${editorType==='work'?'bg-white dark:bg-slate-700 text-blue-600 shadow':'text-slate-400'}`}><i className="fa-solid fa-briefcase text-sm inline mr-1"></i> Práce</button>
+                                    <button onClick={() => setEditorType('vacation')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${editorType==='vacation'?'bg-white dark:bg-slate-700 text-emerald-600 shadow':'text-slate-400'}`}><i className="fa-solid fa-umbrella text-sm inline mr-1"></i> Dovolená</button>
+                                    <button onClick={() => setEditorType('sick')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${editorType==='sick'?'bg-white dark:bg-slate-700 text-orange-600 shadow':'text-slate-400'}`}><i className="fa-solid fa-capsules text-sm inline mr-1"></i> Nemoc</button>
                                 </div>
                                 <div className="space-y-6">
                                     {editorType === 'work' ? (
                                         <>
-                                            <div className="text-center"><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest">Čas (např. 8-16)</label><input autoFocus value={inputValue} onChange={e => setInputValue(e.target.value)} className="w-full text-4xl font-black p-5 bg-slate-50 dark:bg-slate-950 rounded-[2rem] border-none outline-none focus:ring-2 ring-blue-500 text-center text-slate-800 dark:text-slate-100" placeholder="8:00 - 16:00" /></div>
+                                            <div className="text-center"><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest">Čas (např. 8-16)</label><input value={inputValue} onChange={e => setInputValue(e.target.value)} className="w-full text-4xl font-black p-5 bg-slate-50 dark:bg-slate-950 rounded-[2rem] border-none outline-none focus:ring-2 ring-blue-500 text-center text-slate-800 dark:text-slate-100 shadow-sm" placeholder="8:00 - 16:00" /></div>
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-[2rem] text-center"><label className="text-[9px] font-black text-slate-400 block mb-1 uppercase">Pauza (m)</label><input type="number" value={breakValue} onChange={e => setBreakValue(e.target.value)} placeholder="Auto" className="w-full bg-transparent text-xl font-black outline-none text-center" /></div>
-                                                <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-[2rem] text-center relative"><label className="text-[9px] font-black text-slate-400 block mb-1 uppercase">Smlouva</label><select value={shiftContract} onChange={e => setShiftContract(e.target.value)} className="w-full bg-transparent text-sm font-black outline-none appearance-none text-blue-600 text-center cursor-pointer"><option value="HPP">HPP</option><option value="DPČ">DPČ</option><option value="DPP">DPP</option></select></div>
+                                                <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-[2rem] text-center flex flex-col justify-center shadow-sm"><label className="text-[9px] font-black text-slate-400 block mb-1 uppercase">Pauza (m)</label><input type="number" value={breakValue} onChange={e => setBreakValue(e.target.value)} placeholder="Auto" className="w-full bg-transparent text-xl font-black outline-none text-center text-slate-800 dark:text-slate-100" /></div>
+                                                <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-[2rem] relative flex flex-col justify-center text-center shadow-sm"><label className="text-[9px] font-black text-slate-400 block mb-1 uppercase">Smlouva</label>
+                                                    <div className="relative w-full flex justify-center items-center"><span className="text-xl font-black text-blue-600 absolute pointer-events-none">{shiftContract}</span>
+                                                        <select value={shiftContract} onChange={e => setShiftContract(e.target.value)} className="w-full h-full opacity-0 cursor-pointer text-center"><option value="HPP">HPP</option><option value="DPČ">DPČ</option><option value="DPP">DPP</option></select>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </>
                                     ) : (
-                                        <div className="text-center py-4"><label className="text-[10px] font-black text-slate-400 block mb-4 uppercase tracking-widest text-center">Hodiny k proplacení</label><input type="number" value={hoursValue} onChange={e => setHoursValue(e.target.value)} className="w-full text-5xl font-black p-5 bg-slate-50 dark:bg-slate-950 rounded-[2rem] outline-none text-center text-slate-800 dark:text-slate-100" /></div>
+                                        <div className="text-center py-4"><label className="text-[10px] font-black text-slate-400 block mb-4 uppercase tracking-widest text-center">Hodiny k proplacení</label><input type="number" value={hoursValue} onChange={e => setHoursValue(e.target.value)} className="w-full text-5xl font-black p-5 bg-slate-50 dark:bg-slate-950 rounded-[2rem] outline-none text-center text-slate-800 dark:text-slate-100 shadow-sm" /></div>
                                     )}
-                                    <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-[2rem] text-center"><label className="text-[9px] font-black text-slate-400 block mb-1 tracking-widest uppercase text-center">Sazba (Kč/h)</label><input type="number" value={rateValue} onChange={e => setRateValue(e.target.value)} className="w-full bg-transparent text-xl font-black outline-none text-center text-slate-800 dark:text-slate-100" /></div>
+                                    <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-[2rem] text-center shadow-sm"><label className="text-[9px] font-black text-slate-400 block mb-1 tracking-widest uppercase text-center">Sazba (Kč/h)</label><input type="number" value={rateValue} onChange={e => setRateValue(e.target.value)} className="w-full bg-transparent text-xl font-black outline-none text-center text-slate-800 dark:text-slate-100" /></div>
                                     <div className="grid grid-cols-2 gap-4 pt-4 border-t dark:border-slate-800">
                                         <button onClick={handleSaveShift} className="bg-blue-600 text-white font-black py-5 rounded-3xl shadow-xl active:scale-95 transition-transform uppercase tracking-widest text-xs">Uložit</button>
                                         <button onClick={async () => { await db.collection(`shifts_${activePin}`).doc(editingDate).delete(); setEditingDate(null); }} className="bg-rose-50 dark:bg-rose-900/30 text-rose-500 font-black py-5 rounded-3xl active:scale-95 transition-transform uppercase tracking-widest text-xs">Smazat</button>
@@ -482,9 +537,7 @@
                 </div>
             );
         };
-
-        const container = document.getElementById('root');
-        const root = ReactDOM.createRoot(container);
+        const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
