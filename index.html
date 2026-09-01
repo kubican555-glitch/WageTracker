@@ -381,6 +381,7 @@
                 return `${dObj.getFullYear()}-Q${q}`;
             };
 
+            // --- STREAMING_CHUNK: Advanced Salary Calculations considering Uniform and Quarterly Average Rate ---
             const calculateShiftDetails = (startMin, endMin, customBreak, rate, dateStr, type, fixedHours) => {
                 if (type !== 'work') {
                     return { 
@@ -399,6 +400,7 @@
                 const isWk = [0, 6].includes(dObj.getDay());
                 const isHol = !!holidays[`${String(month+1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`];
                 
+                // Opravené strhávání pauzy
                 let rawNightMins = 0; 
                 let rawDayMins = 0;
                 for (let i = 0; i < diff; i++) { 
@@ -579,6 +581,19 @@
                 }
                 touchStartX.current = 0; touchEndX.current = 0; touchStartY.current = 0; touchEndY.current = 0;
             };
+            
+            // --- STREAMING_CHUNK: Editor formatters ---
+            const displayStart = startHour + startMin;
+            let formattedStart = displayStart;
+            if (displayStart.length >= 3) {
+                formattedStart = displayStart.slice(0, 2) + ':' + displayStart.slice(2);
+            }
+            
+            const displayEnd = endHour + endMin;
+            let formattedEnd = displayEnd;
+            if (displayEnd.length >= 3) {
+                formattedEnd = displayEnd.slice(0, 2) + ':' + displayEnd.slice(2);
+            }
 
             if (isInitializing) return (
                 <div className="min-h-screen flex flex-col items-center justify-center dark:bg-slate-950 transition-colors duration-500">
@@ -724,9 +739,9 @@
                                 <div className="absolute inset-0 overflow-hidden rounded-[2.5rem] pointer-events-none">
                                     <div className="absolute -right-20 -top-20 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl"></div>
                                     <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-indigo-400 opacity-30 rounded-full blur-2xl"></div>
-                                </div>
-                                <div className="absolute right-8 top-8 opacity-40 pointer-events-none">
-                                    <i className="fa-solid fa-wifi rotate-90 text-2xl"></i>
+                                    <div className="absolute right-8 top-8 opacity-40 pointer-events-none">
+                                        <i className="fa-solid fa-wifi rotate-90 text-2xl"></i>
+                                    </div>
                                 </div>
                                 
                                 <div className="relative z-10 mb-8 mt-2">
@@ -1143,8 +1158,8 @@
                                                             type="text" 
                                                             inputMode="numeric" 
                                                             pattern="[0-9]*" 
-                                                            maxLength={4} 
-                                                            value={startHour + startMin} 
+                                                            maxLength={5} 
+                                                            value={formattedStart} 
                                                             onFocus={e => e.target.select()}
                                                             onChange={e => {
                                                                 const val = e.target.value.replace(/\D/g, '');
@@ -1159,8 +1174,8 @@
                                                                     setStartHour(h); setStartMin(m);
                                                                 }
                                                             }} 
-                                                            className="w-16 text-center text-xl font-black bg-transparent outline-none text-slate-800 dark:text-slate-100 tracking-[0.2em]" 
-                                                            placeholder="0000" 
+                                                            className="w-24 text-center text-2xl font-black bg-transparent outline-none text-slate-800 dark:text-slate-100 tracking-widest" 
+                                                            placeholder="00:00" 
                                                         />
                                                     </div>
 
@@ -1171,8 +1186,8 @@
                                                             type="text" 
                                                             inputMode="numeric" 
                                                             pattern="[0-9]*" 
-                                                            maxLength={4} 
-                                                            value={endHour + endMin} 
+                                                            maxLength={5} 
+                                                            value={formattedEnd} 
                                                             onFocus={e => e.target.select()}
                                                             onChange={e => {
                                                                 const val = e.target.value.replace(/\D/g, '');
@@ -1187,8 +1202,8 @@
                                                                     setEndHour(h); setEndMin(m);
                                                                 }
                                                             }} 
-                                                            className="w-16 text-center text-xl font-black bg-transparent outline-none text-slate-800 dark:text-slate-100 tracking-[0.2em]" 
-                                                            placeholder="0000" 
+                                                            className="w-24 text-center text-2xl font-black bg-transparent outline-none text-slate-800 dark:text-slate-100 tracking-widest" 
+                                                            placeholder="00:00" 
                                                         />
                                                     </div>
                                                 </div>
