@@ -50,7 +50,6 @@
         ::-webkit-scrollbar { display: none; }
         * { scrollbar-width: none; }
 
-        /* Zarovnání selectů pro iOS Safari */
         select {
             text-align-last: center;
             text-align: center;
@@ -100,6 +99,36 @@
             return res;
         };
 
+        // --- STREAMING_CHUNK: Animated Number Ticker Component ---
+        const AnimatedNumber = ({ value }) => {
+            const [displayValue, setDisplayValue] = useState(0);
+
+            useEffect(() => {
+                let startTimestamp = null;
+                const duration = 600; 
+                const startValue = displayValue;
+                const endValue = value;
+
+                if (startValue === endValue) return;
+
+                const step = (timestamp) => {
+                    if (!startTimestamp) startTimestamp = timestamp;
+                    const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                    const easeProgress = 1 - Math.pow(1 - progress, 4); 
+                    setDisplayValue(Math.floor(startValue + (endValue - startValue) * easeProgress));
+                    
+                    if (progress < 1) {
+                        window.requestAnimationFrame(step);
+                    } else {
+                        setDisplayValue(endValue);
+                    }
+                };
+                window.requestAnimationFrame(step);
+            }, [value]);
+
+            return <span>{displayValue.toLocaleString('cs-CZ')}</span>;
+        };
+
         // --- STREAMING_CHUNK: Rendering Authentication and Login Screens ---
         const AuthScreen = ({ onLoginSuccess, globalError }) => {
             const [view, setView] = useState('login'); 
@@ -137,7 +166,7 @@
 
             return (
                 <div className="min-h-screen flex flex-col items-center justify-center p-4">
-                    <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl p-8 border border-slate-200 dark:border-slate-800">
+                    <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none p-8 border border-slate-100 dark:border-slate-800/60">
                         <div className="flex flex-col items-center mb-8">
                             <div className="bg-blue-600 p-4 rounded-3xl text-white shadow-xl mb-4 shadow-blue-200 dark:shadow-none flex items-center justify-center w-16 h-16">
                                 <i className="fa-solid fa-wallet text-[32px]"></i>
@@ -239,7 +268,6 @@
             const [editingDate, setEditingDate] = useState(null);
             const [editorType, setEditorType] = useState('work'); 
             
-            // Samostatné stavy pro čtyři boxy času
             const [startHour, setStartHour] = useState('');
             const [startMin, setStartMin] = useState('');
             const [endHour, setEndHour] = useState('');
@@ -250,7 +278,6 @@
             const [rateValue, setRateValue] = useState('0');
             const [shiftContract, setShiftContract] = useState('HPP');
 
-            // Stavy pro Hromadnou změnu sazeb
             const [showBulkModal, setShowBulkModal] = useState(false);
             const [bulkRate, setBulkRate] = useState('');
             const [bulkTypeFilter, setBulkTypeFilter] = useState('all');
@@ -258,13 +285,11 @@
             const [bulkLoading, setBulkLoading] = useState(false);
             const [bulkStatus, setBulkStatus] = useState('');
 
-            // Reference pro uchování dotykových souřadnic (Swipe)
             const touchStartX = useRef(0);
             const touchEndX = useRef(0);
             const touchStartY = useRef(0);
             const touchEndY = useRef(0);
 
-            // Nastavení s novými parametry
             const [settings, setSettings] = useState({
                 defaultRate: 180, 
                 defaultContract: 'HPP', 
@@ -274,20 +299,11 @@
                 uniformEnabled: true,       
                 uniformRate: 5,             
                 disabledUniformMonths: {},  
-                customUniformRates: {}, // Ukládání upravených sazeb uniformy pro jednotlivé měsíce
+                customUniformRates: {}, 
                 quarterlyAverages: {        
-                    '2024-Q1': 139.23,
-                    '2024-Q2': 139.23,
-                    '2024-Q3': 139.23,
-                    '2024-Q4': 139.23,
-                    '2025-Q1': 145.00,
-                    '2025-Q2': 145.00,
-                    '2025-Q3': 145.00,
-                    '2025-Q4': 145.00,
-                    '2026-Q1': 150.00,
-                    '2026-Q2': 150.00,
-                    '2026-Q3': 150.00,
-                    '2026-Q4': 150.00
+                    '2024-Q1': 139.23, '2024-Q2': 139.23, '2024-Q3': 139.23, '2024-Q4': 139.23,
+                    '2025-Q1': 145.00, '2025-Q2': 145.00, '2025-Q3': 145.00, '2025-Q4': 145.00,
+                    '2026-Q1': 150.00, '2026-Q2': 150.00, '2026-Q3': 150.00, '2026-Q4': 150.00
                 },
                 useAverageForPremiums: true  
             });
@@ -332,7 +348,7 @@
             const startOffset = (new Date(year, month, 1).getDay() + 6) % 7;
 
             // Formátování hodin striktně na 2 desetinná místa
-            const formatHrs = (m) => `${(m/60).toFixed(2).replace('.', ',')}h`;
+            const formatHrs = (m) => `${(m/60).toLocaleString('cs-CZ', {minimumFractionDigits: 2, maximumFractionDigits: 2})}h`;
 
             // --- STREAMING_CHUNK: Dynamic Duration Calculation for Live Editor ---
             const liveDuration = useMemo(() => {
@@ -347,7 +363,7 @@
                 const startTotal = sh * 60 + sm;
                 const endTotal = eh * 60 + em;
                 let diff = endTotal - startTotal;
-                if (diff < 0) diff += 1440; // Noční směny
+                if (diff < 0) diff += 1440; 
 
                 let breakMins = breakValue !== '' ? parseInt(breakValue, 10) : (diff > 360 ? 30 : 0);
                 if (isNaN(breakMins)) breakMins = 0;
@@ -356,36 +372,22 @@
                 const hours = Math.floor(net / 60);
                 const mins = net % 60;
 
-                return {
-                    netHours: hours,
-                    netMins: mins,
-                    breakMins
-                };
+                return { netHours: hours, netMins: mins, breakMins };
             }, [startHour, startMin, endHour, endMin, breakValue, editorType]);
 
-            // Pomocná funkce pro zjištění čtvrtletního klíče
             const getQuarterKeyForDateStr = (dateStr) => {
                 const dObj = new Date(dateStr);
                 const q = Math.floor(dObj.getMonth() / 3) + 1;
                 return `${dObj.getFullYear()}-Q${q}`;
             };
 
-            // --- STREAMING_CHUNK: Advanced Salary Calculations considering Uniform and Quarterly Average Rate ---
             const calculateShiftDetails = (startMin, endMin, customBreak, rate, dateStr, type, fixedHours) => {
                 if (type !== 'work') {
                     return { 
-                        type, 
-                        netMinutes: fixedHours * 60, 
-                        base: fixedHours * rate, 
+                        type, netMinutes: fixedHours * 60, base: fixedHours * rate, 
                         gross: type === 'vacation' ? fixedHours * rate : fixedHours * rate * 0.6, 
-                        breakMinutes: 0, 
-                        raw: `${fixedHours}h`, 
-                        nBonus: 0, 
-                        wBonus: 0, 
-                        hBonus: 0,
-                        nightHrs: 0,
-                        weekendHrs: 0,
-                        holidayHrs: 0
+                        breakMinutes: 0, raw: `${fixedHours}h`, nBonus: 0, wBonus: 0, hBonus: 0,
+                        nightHrs: 0, weekendHrs: 0, holidayHrs: 0
                     };
                 }
 
@@ -397,7 +399,6 @@
                 const isWk = [0, 6].includes(dObj.getDay());
                 const isHol = !!holidays[`${String(month+1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`];
                 
-                // Výpočet nočních hodin - opraveno strhávání pauzy (nejprve z denních hodin)
                 let rawNightMins = 0; 
                 let rawDayMins = 0;
                 for (let i = 0; i < diff; i++) { 
@@ -412,12 +413,9 @@
                 const weekendMinutes = isWk ? net : 0;
                 const holidayMinutes = isHol ? net : 0;
 
-                // Výběr čtvrtletního průměru pro příplatky
                 const qKey = getQuarterKeyForDateStr(dateStr);
                 const qAverage = settings.quarterlyAverages?.[qKey];
-                const premiumBaseRate = (settings.useAverageForPremiums && qAverage > 0) 
-                    ? parseFloat(qAverage) 
-                    : rate;
+                const premiumBaseRate = (settings.useAverageForPremiums && qAverage > 0) ? parseFloat(qAverage) : rate;
 
                 const base = (net / 60) * rate;
                 const nB = (nightMinutes / 60) * premiumBaseRate * (settings.bonuses.night / 100);
@@ -425,17 +423,9 @@
                 const hB = isHol ? (net / 60) * premiumBaseRate * (settings.bonuses.holiday / 100) : 0;
 
                 return { 
-                    type: 'work', 
-                    netMinutes: net, 
-                    base, 
-                    nBonus: nB, 
-                    wBonus: wB, 
-                    hBonus: hB, 
-                    gross: base + nB + wB + hB, 
-                    breakMinutes: breakMins,
-                    nightHrs: nightMinutes / 60,
-                    weekendHrs: weekendMinutes / 60,
-                    holidayHrs: holidayMinutes / 60 
+                    type: 'work', netMinutes: net, base, nBonus: nB, wBonus: wB, hBonus: hB, 
+                    gross: base + nB + wB + hB, breakMinutes: breakMins,
+                    nightHrs: nightMinutes / 60, weekendHrs: weekendMinutes / 60, holidayHrs: holidayMinutes / 60 
                 };
             };
 
@@ -460,16 +450,11 @@
                 setEditingDate(null);
             };
 
-            // --- STREAMING_CHUNK: Hromadné zpracování změn u více směn najednou (Bulk Update) ---
             const handleBulkRateUpdate = async (e) => {
                 e.preventDefault();
                 const newRate = parseFloat(bulkRate);
-                if (isNaN(newRate) || newRate <= 0) {
-                    setBulkStatus('Chyba: Zadej platnou číselnou sazbu.');
-                    return;
-                }
-                setBulkLoading(true);
-                setBulkStatus('Přepočítávám a ukládám...');
+                if (isNaN(newRate) || newRate <= 0) return setBulkStatus('Chyba: Zadej platnou číselnou sazbu.');
+                setBulkLoading(true); setBulkStatus('Přepočítávám a ukládám...');
 
                 try {
                     const monthPrefix = `${year}-${String(month+1).padStart(2, '0')}`;
@@ -481,11 +466,7 @@
                         return true;
                     });
 
-                    if (targetDates.length === 0) {
-                        setBulkStatus('Nebyly nalezeny žádné odpovídající směny.');
-                        setBulkLoading(false);
-                        return;
-                    }
+                    if (targetDates.length === 0) { setBulkStatus('Nebyly nalezeny žádné odpovídající směny.'); setBulkLoading(false); return; }
 
                     const batch = db.batch();
                     targetDates.forEach(dateStr => {
@@ -499,220 +480,104 @@
                             }
                         }
                         const fHours = s.netMinutes / 60;
-                        const details = calculateShiftDetails(
-                            start,
-                            end,
-                            s.breakMinutes !== undefined ? s.breakMinutes.toString() : '',
-                            newRate,
-                            dateStr,
-                            s.type,
-                            fHours
-                        );
-                        
-                        const docRef = db.collection(`shifts_${activePin}`).doc(dateStr);
-                        batch.set(docRef, {
-                            ...s,
-                            ...details,
-                            rate: newRate
-                        }, { merge: true });
+                        const details = calculateShiftDetails(start, end, s.breakMinutes !== undefined ? s.breakMinutes.toString() : '', newRate, dateStr, s.type, fHours);
+                        batch.set(db.collection(`shifts_${activePin}`).doc(dateStr), { ...s, ...details, rate: newRate }, { merge: true });
                     });
 
                     await batch.commit();
                     setBulkStatus(`Úspěšně upraveno ${targetDates.length} směn.`);
-                    setTimeout(() => {
-                        setShowBulkModal(false);
-                        setBulkStatus('');
-                        setBulkRate('');
-                    }, 1500);
-                } catch (err) {
-                    setBulkStatus('Došlo k chybě při zápisu do databáze.');
-                    console.error(err);
-                }
+                    setTimeout(() => { setShowBulkModal(false); setBulkStatus(''); setBulkRate(''); }, 1500);
+                } catch (err) { setBulkStatus('Chyba databáze.'); }
                 setBulkLoading(false);
             };
 
-            // --- STREAMING_CHUNK: Processing Monthly Totals, Deductions, and Allowances (Czech Legislation) ---
             const monthlyData = useMemo(() => {
                 const list = Object.keys(shifts).filter(k => k.startsWith(`${year}-${String(month+1).padStart(2, '0')}`)).sort().map(k => ({ date: k, ...shifts[k] }));
                 const groups = { HPP: { gross: 0, hrs: 0, workHrs: 0, base: 0 }, DPČ: { gross: 0, hrs: 0, workHrs: 0, base: 0 }, DPP: { gross: 0, hrs: 0, workHrs: 0, base: 0 } };
                 let nB = 0, wB = 0, hB = 0, baseW = 0, sickW = 0, vacW = 0, workHrs = 0;
                 let nHrs = 0, wHrs = 0, hHrs = 0;
 
-                // Výpočet odpracovaných hodin na DPP za celý aktuální rok
                 let yearlyDPPHrs = 0;
                 Object.keys(shifts).forEach(k => {
                     if (k.startsWith(`${year}-`)) {
                         const s = shifts[k];
-                        if (s.contractType === 'DPP' && s.type === 'work') {
-                            yearlyDPPHrs += s.netMinutes / 60;
-                        }
+                        if (s.contractType === 'DPP' && s.type === 'work') yearlyDPPHrs += s.netMinutes / 60;
                     }
                 });
                 
                 list.forEach(s => {
                     const t = s.contractType || 'HPP'; if (!groups[t]) return;
-                    groups[t].gross += s.gross; 
-                    groups[t].hrs += s.netMinutes/60;
-                    if (s.type === 'sick') {
-                        sickW += s.gross;
-                    } else if (s.type === 'vacation') {
-                        vacW += s.gross;
-                    } else { 
-                        nB += (s.nBonus||0); 
-                        wB += (s.wBonus||0); 
-                        hB += (s.hBonus||0); 
-                        nHrs += (s.nightHrs||0);
-                        wHrs += (s.weekendHrs||0);
-                        hHrs += (s.holidayHrs||0);
-                        baseW += (s.base||0); 
-                        workHrs += (s.netMinutes/60); // Hodiny pouze pro skutečně odpracované dny
-                        groups[t].workHrs += (s.netMinutes/60);
-                        groups[t].base += (s.base||0);
+                    groups[t].gross += s.gross; groups[t].hrs += s.netMinutes/60;
+                    if (s.type === 'sick') sickW += s.gross;
+                    else if (s.type === 'vacation') vacW += s.gross;
+                    else { 
+                        nB += (s.nBonus||0); wB += (s.wBonus||0); hB += (s.hBonus||0); 
+                        nHrs += (s.nightHrs||0); wHrs += (s.weekendHrs||0); hHrs += (s.holidayHrs||0);
+                        baseW += (s.base||0); workHrs += (s.netMinutes/60); 
+                        groups[t].workHrs += (s.netMinutes/60); groups[t].base += (s.base||0);
                     }
                 });
 
-                // Kontrola, zda je příspěvek na uniformu vypnut pro aktuální měsíc
                 const monthKey = `${year}-${String(month+1).padStart(2, '0')}`;
                 const isUniformDisabledThisMonth = settings.disabledUniformMonths?.[monthKey] === true;
                 const isUniformActive = settings.uniformEnabled && !isUniformDisabledThisMonth;
-
-                // Určení sazby uniformy (buď custom pro tento měsíc, nebo výchozí)
                 const activeUniformRate = settings.customUniformRates?.[monthKey] !== undefined ? settings.customUniformRates[monthKey] : (parseFloat(settings.uniformRate) || 0);
-
-                // Výpočet příspěvku na údržbu uniformy (osvobozeno od daní a pojistného)
                 const uniformPay = isUniformActive ? (workHrs * activeUniformRate) : 0;
 
                 let totalSoc = 0, totalZdra = 0, rawTax = 0, totalTaxableGross = 0;
-                
                 Object.keys(groups).forEach(t => {
                     const g = groups[t]; if (g.gross <= 0) return; 
                     totalTaxableGross += g.gross;
-                    
-                    // Výpočet zálohy na daň (základ se u zálohy vždy zaokrouhluje na celé stokoruny nahoru)
                     const roundedGrossForTax = Math.ceil(g.gross / 100) * 100;
 
-                    if (t === 'HPP') { 
-                        totalSoc += g.gross * 0.071; 
-                        totalZdra += g.gross * 0.045; 
-                        rawTax += roundedGrossForTax * 0.15; 
-                    }
-                    else if (t === 'DPP' && g.gross > 10500) { 
-                        totalSoc += g.gross * 0.071; 
-                        totalZdra += g.gross * 0.045; 
-                        rawTax += roundedGrossForTax * 0.15; 
-                    }
-                    else if (t === 'DPČ' && g.gross >= 4000) { 
-                        totalSoc += g.gross * 0.071; 
-                        totalZdra += g.gross * 0.045; 
-                        rawTax += roundedGrossForTax * 0.15; 
-                    }
-                    else {
-                        // Podlimitní dohody - daň se odvádí přímo, ale neplatí se pojistné
-                        rawTax += g.gross * 0.15; 
-                    }
+                    if (t === 'HPP' || (t === 'DPP' && g.gross > 10500) || (t === 'DPČ' && g.gross >= 4000)) { 
+                        totalSoc += g.gross * 0.071; totalZdra += g.gross * 0.045; rawTax += roundedGrossForTax * 0.15; 
+                    } else rawTax += g.gross * 0.15; 
                 });
 
                 const sleva = Number(settings.discounts.taxpayer) + Number(settings.discounts.kids);
                 const finalTax = Math.max(0, rawTax - sleva);
-                
-                // Čistá mzda zdanitelná (bez osvobozených příspěvků)
                 const netWage = totalTaxableGross - totalSoc - totalZdra - finalTax;
                 
-                // Čistý příjem celkem k výplatě (včetně osvobozeného příspěvku na uniformu)
-                const netIncomeWithUniform = netWage + uniformPay;
-
                 return { 
-                    list, 
-                    gross: totalTaxableGross, 
-                    net: netIncomeWithUniform, 
-                    netWageOnly: netWage,
-                    uniformPay,
-                    activeUniformRate,
-                    isUniformActive,
-                    soc: totalSoc, 
-                    zdra: totalZdra, 
-                    rawTax: rawTax, 
-                    appliedDiscount: Math.min(rawTax, sleva), 
-                    sleva, 
+                    list, gross: totalTaxableGross, net: netWage + uniformPay, netWageOnly: netWage, uniformPay, activeUniformRate, isUniformActive,
+                    soc: totalSoc, zdra: totalZdra, rawTax: rawTax, appliedDiscount: Math.min(rawTax, sleva), sleva, 
                     bonuses: { night: nB, weekend: wB, holiday: hB, base: baseW, sick: sickW, vacation: vacW, nightHrs: nHrs, weekendHrs: wHrs, holidayHrs: hHrs }, 
-                    actualHrs: list.reduce((a,b)=>a+b.netMinutes,0)/60,
-                    workedHrsOnly: workHrs,
-                    contractGroups: groups,
-                    yearlyDPPHrs
+                    actualHrs: list.reduce((a,b)=>a+b.netMinutes,0)/60, workedHrsOnly: workHrs, contractGroups: groups, yearlyDPPHrs
                 };
             }, [shifts, month, year, settings]);
 
-
-            // --- STREAMING_CHUNK: Opening Editor and Autofilling Input Values ---
             const openEditor = (dateStr) => {
                 const s = shifts[dateStr]; setEditingDate(dateStr);
                 if (s) { 
-                    setEditorType(s.type || 'work'); 
-                    setBreakValue(s.breakMinutes?.toString() || ''); 
+                    setEditorType(s.type || 'work'); setBreakValue(s.breakMinutes?.toString() || ''); 
                     setHoursValue(s.type !== 'work' ? (s.netMinutes/60).toString() : '8'); 
-                    setRateValue(s.rate); 
-                    setShiftContract(s.contractType || settings.defaultContract); 
+                    setRateValue(s.rate); setShiftContract(s.contractType || settings.defaultContract); 
 
                     let sh = '', sm = '', eh = '', em = '';
                     if (s.type === 'work' && s.raw) {
                         const parts = s.raw.replace(/\s/g, '').split('-');
                         if (parts.length === 2) {
-                            const p1 = parts[0].split(':');
-                            sh = p1[0] ? p1[0].padStart(2, '0') : '';
-                            sm = p1[1] ? p1[1].padStart(2, '0') : '';
-                            const p2 = parts[1].split(':');
-                            eh = p2[0] ? p2[0].padStart(2, '0') : '';
-                            em = p2[1] ? p2[1].padStart(2, '0') : '';
+                            const p1 = parts[0].split(':'); sh = p1[0] ? p1[0].padStart(2, '0') : ''; sm = p1[1] ? p1[1].padStart(2, '0') : '';
+                            const p2 = parts[1].split(':'); eh = p2[0] ? p2[0].padStart(2, '0') : ''; em = p2[1] ? p2[1].padStart(2, '0') : '';
                         }
                     }
-                    setStartHour(sh);
-                    setStartMin(sm);
-                    setEndHour(eh);
-                    setEndMin(em);
+                    setStartHour(sh); setStartMin(sm); setEndHour(eh); setEndMin(em);
                 }
                 else { 
-                    setEditorType('work'); 
-                    setStartHour('');
-                    setStartMin('');
-                    setEndHour('');
-                    setEndMin('');
-                    setBreakValue(''); 
-                    setRateValue(settings.defaultRate); 
-                    setShiftContract(settings.defaultContract); 
+                    setEditorType('work'); setStartHour(''); setStartMin(''); setEndHour(''); setEndMin('');
+                    setBreakValue(''); setRateValue(settings.defaultRate); setShiftContract(settings.defaultContract); 
                 }
             };
 
-            // --- STREAMING_CHUNK: Touch Events for Calendar Month Swiping ---
-            const handleTouchStart = (e) => {
-                touchStartX.current = e.targetTouches[0].clientX;
-                touchStartY.current = e.targetTouches[0].clientY;
-                touchEndX.current = e.targetTouches[0].clientX;
-                touchEndY.current = e.targetTouches[0].clientY;
-            };
-
-            const handleTouchMove = (e) => {
-                touchEndX.current = e.targetTouches[0].clientX;
-                touchEndY.current = e.targetTouches[0].clientY;
-            };
-
+            const handleTouchStart = (e) => { touchStartX.current = e.targetTouches[0].clientX; touchStartY.current = e.targetTouches[0].clientY; touchEndX.current = e.targetTouches[0].clientX; touchEndY.current = e.targetTouches[0].clientY; };
+            const handleTouchMove = (e) => { touchEndX.current = e.targetTouches[0].clientX; touchEndY.current = e.targetTouches[0].clientY; };
             const handleTouchEnd = () => {
-                const diffX = touchStartX.current - touchEndX.current;
-                const diffY = touchStartY.current - touchEndY.current;
-                const minDistance = 50; 
-
-                if (Math.abs(diffX) > Math.abs(diffY)) {
-                    if (Math.abs(diffX) > minDistance) {
-                        if (diffX > 0) {
-                            setCurrentDate(new Date(year, month + 1));
-                        } else {
-                            setCurrentDate(new Date(year, month - 1));
-                        }
-                    }
+                const diffX = touchStartX.current - touchEndX.current; const diffY = touchStartY.current - touchEndY.current;
+                if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+                    if (diffX > 0) setCurrentDate(new Date(year, month + 1)); else setCurrentDate(new Date(year, month - 1));
                 }
-                touchStartX.current = 0;
-                touchEndX.current = 0;
-                touchStartY.current = 0;
-                touchEndY.current = 0;
+                touchStartX.current = 0; touchEndX.current = 0; touchStartY.current = 0; touchEndY.current = 0;
             };
 
             if (isInitializing) return (
@@ -726,39 +591,32 @@
 
             return (
                 <div className="max-w-md mx-auto p-4 pb-32 animate-in">
-                    {/* Header */}
-                    <header className="flex justify-between items-center mb-6">
+                    <header className="flex justify-between items-center mb-6 px-1">
                         <div className="flex items-center gap-3">
                             <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-200 dark:shadow-none w-10 h-10 flex items-center justify-center"><i className="fa-solid fa-wallet text-xl"></i></div>
                             <div><h1 className="text-xl font-black italic tracking-tight">WageTracker</h1><p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1 leading-none">Moje výplata</p></div>
                         </div>
-                        <button onClick={() => setActiveTab('settings')} className={`p-2 rounded-xl border border-slate-200 dark:border-slate-800 active:scale-95 shadow-sm transition-transform ${activeTab === 'settings' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-900'}`}><i className="fa-solid fa-gear text-lg"></i></button>
+                        <button onClick={() => setActiveTab('settings')} className={`p-2 rounded-xl border border-slate-100 dark:border-slate-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none active:scale-95 transition-transform ${activeTab === 'settings' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-900'}`}><i className="fa-solid fa-gear text-lg"></i></button>
                     </header>
 
                     {/* --- STREAMING_CHUNK: Calendar Tab --- */}
                     {activeTab === 'calendar' && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                            <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-100 dark:border-slate-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none">
                                 <button onClick={() => setCurrentDate(new Date(year, month-1))} className="p-2 active:scale-90 transition-transform"><i className="fa-solid fa-chevron-left text-xl text-slate-400"></i></button>
                                 <span className="font-bold text-sm uppercase tracking-tighter">{new Intl.DateTimeFormat('cs-CZ', {month:'long', year:'numeric'}).format(currentDate)}</span>
                                 <button onClick={() => setCurrentDate(new Date(year, month+1))} className="p-2 active:scale-90 transition-transform"><i className="fa-solid fa-chevron-right text-xl text-slate-400"></i></button>
                             </div>
                             
-                            <div 
-                                onTouchStart={handleTouchStart}
-                                onTouchMove={handleTouchMove}
-                                onTouchEnd={handleTouchEnd}
-                                className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm touch-pan-y select-none"
-                            >
+                            <div onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800/60 overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none touch-pan-y select-none">
                                 <div className="grid grid-cols-7 bg-slate-50/50 dark:bg-slate-800/30">
                                     {['Po','Út','St','Čt','Pá','So','Ne'].map(d => <div key={d} className="py-3 text-center text-[9px] font-bold text-slate-400 uppercase">{d}</div>)}
                                 </div>
                                 <div className="grid grid-cols-7">
-                                    {Array.from({ length: startOffset }).map((_, i) => <div key={`empty-${i}`} className="h-16 bg-slate-50/10 dark:bg-slate-950/20 border-b border-r border-slate-100 dark:border-slate-800" />)}
+                                    {Array.from({ length: startOffset }).map((_, i) => <div key={`empty-${i}`} className="h-16 bg-slate-50/10 dark:bg-slate-950/20 border-b border-r border-slate-100 dark:border-slate-800/60" />)}
                                     {Array.from({ length: daysInMonth }).map((_, i) => {
                                         const d = i + 1;
-                                        const today = new Date();
-                                        const isT = today.getDate() === d && today.getMonth() === month && today.getFullYear() === year;
+                                        const isT = new Date().getDate() === d && new Date().getMonth() === month && new Date().getFullYear() === year;
                                         const ds = `${year}-${String(month+1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                                         
                                         const s = shifts[ds];
@@ -775,9 +633,8 @@
                                         else if (isWk) { bg='bg-amber-50/30 dark:bg-amber-900/10'; txt='text-amber-600'; }
                                         
                                         return (
-                                            <div key={ds} onClick={() => openEditor(ds)} className={`h-16 flex flex-col items-center justify-start py-1 border-b border-r border-slate-100 dark:border-slate-800 cursor-pointer active:scale-90 relative transition-all ${bg} ${isT ? 'ring-2 ring-inset ring-blue-500' : ''}`}>
+                                            <div key={ds} onClick={() => openEditor(ds)} className={`h-16 flex flex-col items-center justify-start py-1 border-b border-r border-slate-100 dark:border-slate-800/60 cursor-pointer active:scale-90 relative transition-all ${bg} ${isT ? 'ring-2 ring-inset ring-blue-500' : ''}`}>
                                                 <span className={`text-[11px] font-bold ${txt}`}>{d}</span>
-                                                
                                                 <div className="flex justify-center gap-1 mt-1 h-1.5 w-full">
                                                     {s?.type==='work' && s.nBonus>0 && <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shadow-sm"></span>}
                                                     {s?.type==='work' && s.wBonus>0 && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-sm"></span>}
@@ -785,7 +642,6 @@
                                                     {s?.type === 'vacation' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-sm"></span>}
                                                     {s?.type === 'sick' && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-sm"></span>}
                                                 </div>
-
                                                 {s && <span className={`text-[9px] font-bold mt-auto leading-none pb-0.5 ${s.type === 'vacation' ? 'text-emerald-600' : s.type === 'sick' ? 'text-orange-600' : 'text-slate-500 dark:text-slate-400'}`}>{formatHrs(s.netMinutes)}</span>}
                                             </div>
                                         );
@@ -795,7 +651,7 @@
                         </div>
                     )}
 
-                    {/* --- STREAMING_CHUNK: Shifts List Tab with Bulk Update button --- */}
+                    {/* --- STREAMING_CHUNK: Shifts List Tab --- */}
                     {activeTab === 'list' && (
                         <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className="flex justify-between items-center mb-4 px-2">
@@ -803,69 +659,95 @@
                                     Moje směny <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 text-[10px]">{monthlyData.list.length}</span>
                                 </h2>
                                 {monthlyData.list.length > 0 && (
-                                    <button 
-                                        onClick={() => setShowBulkModal(true)} 
-                                        className="text-[10px] font-bold uppercase text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-xl hover:scale-95 transition-all flex items-center gap-1.5 border border-blue-100 dark:border-blue-800/40"
-                                    >
+                                    <button onClick={() => setShowBulkModal(true)} className="text-[10px] font-bold uppercase text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-xl hover:scale-95 transition-all flex items-center gap-1.5 border border-blue-100 dark:border-blue-800/40">
                                         <i className="fa-solid fa-pen-to-square"></i> Hromadná změna
                                     </button>
                                 )}
                             </div>
                             
                             {monthlyData.list.length === 0 ? (
-                                <div className="text-center py-12 text-slate-400 italic text-sm">
-                                    V tomto měsíci zatím nemáš zapsané žádné směny.
+                                <div className="flex flex-col items-center justify-center py-16 px-6 text-center bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none mt-2">
+                                    <div className="w-20 h-20 bg-blue-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6 shadow-inner">
+                                        <i className="fa-regular fa-calendar-xmark text-3xl text-blue-300 dark:text-slate-500"></i>
+                                    </div>
+                                    <h3 className="font-black text-lg text-slate-800 dark:text-white mb-2">Žádné směny</h3>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-8">V tomto měsíci nemáš zapsanou žádnou směnu. Kliknutím na tlačítko níže otevřeš kalendář a můžeš si je naplánovat.</p>
+                                    <button onClick={() => setActiveTab('calendar')} className="bg-blue-600 text-white font-bold py-3.5 px-8 rounded-2xl shadow-lg shadow-blue-200 dark:shadow-none active:scale-95 transition-all flex items-center gap-2">
+                                        <i className="fa-solid fa-plus"></i> Přidat první směnu
+                                    </button>
                                 </div>
                             ) : (
-                                monthlyData.list.map(s => (
-                                    <div key={s.date} onClick={() => { openEditor(s.date); }} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col gap-3 active:scale-95 shadow-sm transition-transform">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center ${s.type==='vacation'?'bg-emerald-50 text-emerald-600':s.type==='sick'?'bg-orange-50 text-orange-600':'bg-slate-50 text-slate-400 dark:bg-slate-800'}`}>
-                                                    <span className="text-[8px] font-bold leading-none uppercase">{new Intl.DateTimeFormat('cs-CZ', {weekday:'short'}).format(new Date(s.date))}</span>
-                                                    <span className="text-sm font-black">{new Date(s.date).getDate()}</span>
+                                monthlyData.list.map(s => {
+                                    const shiftUniformPay = (s.type === 'work' && monthlyData.isUniformActive) ? (s.netMinutes / 60) * monthlyData.activeUniformRate : 0;
+                                    const displayTotal = s.gross + shiftUniformPay;
+
+                                    return (
+                                        <div key={s.date} onClick={() => { openEditor(s.date); }} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/60 flex flex-col gap-3 active:scale-95 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none transition-transform cursor-pointer">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center ${s.type==='vacation'?'bg-emerald-50 text-emerald-600':s.type==='sick'?'bg-orange-50 text-orange-600':'bg-slate-50 text-slate-400 dark:bg-slate-800'}`}>
+                                                        <span className="text-[8px] font-bold leading-none uppercase">{new Intl.DateTimeFormat('cs-CZ', {weekday:'short'}).format(new Date(s.date))}</span>
+                                                        <span className="text-sm font-black">{new Date(s.date).getDate()}</span>
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-bold text-xs">{s.type==='vacation'?'Dovolená':s.type==='sick'?'Nemocenská':s.raw}</p>
+                                                            <span className="text-[8px] px-1 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded font-bold">{s.contractType || 'HPP'}</span>
+                                                        </div>
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">
+                                                            {formatHrs(s.netMinutes)} • {s.rate} Kč/h {(s.type === 'work' && monthlyData.isUniformActive) ? ` + ${monthlyData.activeUniformRate} Kč/h` : ''}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                <div><div className="flex items-center gap-2"><p className="font-bold text-xs">{s.type==='vacation'?'Dovolená':s.type==='sick'?'Nemocenská':s.raw}</p><span className="text-[8px] px-1 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded font-bold">{s.contractType || 'HPP'}</span></div><p className="text-[9px] font-bold text-slate-400 uppercase">{formatHrs(s.netMinutes)} • {s.rate} Kč/h</p></div>
+                                                <p className="text-xs font-black">{Math.round(displayTotal).toLocaleString('cs-CZ')} Kč</p>
                                             </div>
-                                            <p className="text-xs font-black">{Math.round(s.gross).toLocaleString()} Kč</p>
+                                            {(s.type==='work' && (s.nBonus>0 || s.wBonus>0 || s.hBonus>0 || shiftUniformPay>0)) && (
+                                                <div className="flex flex-wrap gap-2 border-t border-slate-100 dark:border-slate-800/60 pt-2 mt-1">
+                                                    {s.nBonus>0 && <div className="flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-lg text-indigo-600 text-[8px] font-bold"><i className="fa-solid fa-bolt text-[10px] text-indigo-500"></i>+{Math.round(s.nBonus)} Kč ({formatHrs(s.nightHrs * 60)})</div>}
+                                                    {s.wBonus>0 && <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-lg text-amber-600 text-[8px] font-bold"><i className="fa-solid fa-star text-[10px] text-amber-500"></i>+{Math.round(s.wBonus)} Kč ({formatHrs(s.weekendHrs * 60)})</div>}
+                                                    {s.hBonus>0 && <div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-900/30 px-2 py-0.5 rounded-lg text-rose-600 text-[8px] font-bold"><i className="fa-solid fa-champagne-glasses text-[10px] text-rose-500"></i>+{Math.round(s.hBonus)} Kč ({formatHrs(s.holidayHrs * 60)})</div>}
+                                                    {shiftUniformPay>0 && <div className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-lg text-emerald-600 text-[8px] font-bold">+{Math.round(shiftUniformPay)} Kč</div>}
+                                                </div>
+                                            )}
                                         </div>
-                                        {(s.type==='work' && (s.nBonus>0 || s.wBonus>0 || s.hBonus>0)) && (
-                                            <div className="flex flex-wrap gap-2 border-t dark:border-slate-800 pt-2">
-                                                {s.nBonus>0 && <div className="flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-lg text-indigo-600 text-[8px] font-bold"><i className="fa-solid fa-bolt text-[10px] text-indigo-500"></i>+{Math.round(s.nBonus)} Kč ({formatHrs(s.nightHrs * 60)})</div>}
-                                                {s.wBonus>0 && <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-lg text-amber-600 text-[8px] font-bold"><i className="fa-solid fa-star text-[10px] text-amber-500"></i>+{Math.round(s.wBonus)} Kč ({formatHrs(s.weekendHrs * 60)})</div>}
-                                                {s.hBonus>0 && <div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-900/30 px-2 py-0.5 rounded-lg text-rose-600 text-[8px] font-bold"><i className="fa-solid fa-champagne-glasses text-[10px] text-rose-500"></i>+{Math.round(s.hBonus)} Kč ({formatHrs(s.holidayHrs * 60)})</div>}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))
+                                    )
+                                })
                             )}
                         </div>
                     )}
 
-                    {/* --- STREAMING_CHUNK: Advanced Payslip Tab mirroring image_f84a69.jpg --- */}
+                    {/* --- STREAMING_CHUNK: Advanced Payslip Tab (Fintech Design) --- */}
                     {activeTab === 'payslip' && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            {/* K výplatě na účet (Čistý příjem s uniformou) */}
-                            <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
-                                <div className="absolute -right-10 -bottom-10 opacity-10 text-[120px] font-black">Kč</div>
-                                <p className="text-blue-100 text-[10px] font-bold uppercase tracking-widest mb-1 text-center">K VÝPLATĚ NA ÚČET</p>
-                                <h2 className="text-4xl font-black text-center">{Math.round(monthlyData.net).toLocaleString()} Kč</h2>
+                            
+                            <div className="relative bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-8 rounded-[2.5rem] text-white shadow-[0_15px_40px_-10px_rgba(37,99,235,0.5)]">
+                                <div className="absolute inset-0 overflow-hidden rounded-[2.5rem] pointer-events-none">
+                                    <div className="absolute -right-20 -top-20 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl"></div>
+                                    <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-indigo-400 opacity-30 rounded-full blur-2xl"></div>
+                                </div>
+                                <div className="absolute right-8 top-8 opacity-40 pointer-events-none">
+                                    <i className="fa-solid fa-wifi rotate-90 text-2xl"></i>
+                                </div>
                                 
-                                <div className="grid grid-cols-2 gap-4 mt-6 bg-blue-800/40 p-4 rounded-2xl border border-blue-500/20">
-                                    <div className="text-center">
-                                        <p className="text-[8px] font-bold uppercase text-blue-200">Čistá Mzda (zdanitelná)</p>
-                                        <p className="text-base font-black">{Math.round(monthlyData.netWageOnly).toLocaleString()} Kč</p>
+                                <div className="relative z-10 mb-8 mt-2">
+                                    <p className="text-blue-200 text-[10px] font-bold uppercase tracking-widest mb-1 drop-shadow-sm">K výplatě na účet</p>
+                                    <h2 className="text-4xl font-black tracking-tight drop-shadow-md"><AnimatedNumber value={Math.round(monthlyData.net)} /> Kč</h2>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-3 relative z-10">
+                                    <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl shadow-sm">
+                                        <p className="text-[8px] font-bold uppercase text-blue-200 mb-1">Čistá Mzda</p>
+                                        <p className="text-sm font-black"><AnimatedNumber value={Math.round(monthlyData.netWageOnly)} /> Kč</p>
                                     </div>
-                                    <div className="text-center">
-                                        <p className="text-[8px] font-bold uppercase text-blue-200">Osvobozeno (Uniforma)</p>
-                                        <p className="text-base font-black text-emerald-300">+{Math.round(monthlyData.uniformPay).toLocaleString()} Kč</p>
+                                    <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl shadow-sm">
+                                        <p className="text-[8px] font-bold uppercase text-blue-200 mb-1">Osvobozeno</p>
+                                        <p className="text-sm font-black text-emerald-300">+{Math.round(monthlyData.uniformPay).toLocaleString('cs-CZ')} Kč</p>
                                     </div>
                                 </div>
                             </div>
                             
-                            {/* Sekce Odměňování */}
-                            <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm">
-                                <h3 className="font-bold text-[10px] uppercase text-slate-400 border-b dark:border-slate-800 pb-2 tracking-widest flex justify-between items-center">
+                            <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-100 dark:border-slate-800/60 space-y-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none">
+                                <h3 className="font-bold text-[10px] uppercase text-slate-400 border-b border-slate-100 dark:border-slate-800/60 pb-2 tracking-widest flex justify-between items-center">
                                     <span>ODMĚŇOVÁNÍ</span>
                                     <i className="fa-solid fa-file-invoice-dollar text-slate-300 dark:text-slate-700"></i>
                                 </h3>
@@ -875,7 +757,7 @@
                                             return (
                                                 <div key={type} className="flex justify-between text-sm">
                                                     <span className="text-slate-600 dark:text-slate-400">Základní tarif {type} ({formatHrs(data.workHrs * 60)})</span>
-                                                    <span className="font-bold">{Math.round(data.base).toLocaleString()} Kč</span>
+                                                    <span className="font-bold">{Math.round(data.base).toLocaleString('cs-CZ')} Kč</span>
                                                 </div>
                                             );
                                         }
@@ -884,51 +766,50 @@
                                     {monthlyData.bonuses.night > 0 && (
                                         <div className="flex justify-between text-sm">
                                             <span className="text-slate-600 dark:text-slate-400">Příplatek Noc ({formatHrs(monthlyData.bonuses.nightHrs * 60)})</span>
-                                            <span className="font-bold text-indigo-500">+{Math.round(monthlyData.bonuses.night).toLocaleString()} Kč</span>
+                                            <span className="font-bold text-indigo-500">+{Math.round(monthlyData.bonuses.night).toLocaleString('cs-CZ')} Kč</span>
                                         </div>
                                     )}
                                     {monthlyData.bonuses.weekend > 0 && (
                                         <div className="flex justify-between text-sm">
                                             <span className="text-slate-600 dark:text-slate-400">Příplatek SO+NE {settings.useAverageForPremiums ? '(z průměru)' : ''} ({formatHrs(monthlyData.bonuses.weekendHrs * 60)})</span>
-                                            <span className="font-bold text-amber-500">+{Math.round(monthlyData.bonuses.weekend).toLocaleString()} Kč</span>
+                                            <span className="font-bold text-amber-500">+{Math.round(monthlyData.bonuses.weekend).toLocaleString('cs-CZ')} Kč</span>
                                         </div>
                                     )}
                                     {monthlyData.bonuses.holiday > 0 && (
                                         <div className="flex justify-between text-sm">
                                             <span className="text-slate-600 dark:text-slate-400">Příplatek Svátek ({formatHrs(monthlyData.bonuses.holidayHrs * 60)})</span>
-                                            <span className="font-bold text-rose-500">+{Math.round(monthlyData.bonuses.holiday).toLocaleString()} Kč</span>
+                                            <span className="font-bold text-rose-500">+{Math.round(monthlyData.bonuses.holiday).toLocaleString('cs-CZ')} Kč</span>
                                         </div>
                                     )}
                                     {monthlyData.bonuses.vacation > 0 && (
                                         <div className="flex justify-between text-sm">
                                             <span className="text-emerald-600 dark:text-emerald-400">Náhrada Dovolené</span>
-                                            <span className="font-bold text-emerald-500">+{Math.round(monthlyData.bonuses.vacation).toLocaleString()} Kč</span>
+                                            <span className="font-bold text-emerald-500">+{Math.round(monthlyData.bonuses.vacation).toLocaleString('cs-CZ')} Kč</span>
                                         </div>
                                     )}
                                     {monthlyData.bonuses.sick > 0 && (
                                         <div className="flex justify-between text-sm">
                                             <span className="text-orange-600 dark:text-orange-400 font-semibold">Nemocenská</span>
-                                            <span className="font-bold text-orange-500">+{Math.round(monthlyData.bonuses.sick).toLocaleString()} Kč</span>
+                                            <span className="font-bold text-orange-500">+{Math.round(monthlyData.bonuses.sick).toLocaleString('cs-CZ')} Kč</span>
                                         </div>
                                     )}
-                                    <div className="flex justify-between text-sm font-black border-t dark:border-slate-800 pt-2 text-slate-800 dark:text-slate-200">
+                                    <div className="flex justify-between text-sm font-black border-t border-slate-100 dark:border-slate-800/60 pt-2 text-slate-800 dark:text-slate-200">
                                         <span>Zdanitelný hrubý příjem</span>
-                                        <span>{Math.round(monthlyData.gross).toLocaleString()} Kč</span>
+                                        <span>{Math.round(monthlyData.gross).toLocaleString('cs-CZ')} Kč</span>
                                     </div>
                                 </div>
                             </div>
                             
-                            {/* Zobrazení limitu DPP (pouze v měsících s odpracovanými hodinami na DPP) */}
                             {monthlyData.contractGroups.DPP.hrs > 0 && (
-                                <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm mt-4">
-                                    <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2 mb-2">
+                                <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-100 dark:border-slate-800/60 space-y-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none mt-4">
+                                    <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800/60 pb-2 mb-2">
                                         <h3 className="font-bold text-[10px] uppercase text-slate-400 tracking-widest">Limit DPP (ROK {year})</h3>
                                         <i className="fa-solid fa-chart-pie text-slate-300 dark:text-slate-700"></i>
                                     </div>
                                     <div className="flex justify-between items-end mb-2">
                                         <span className="font-bold text-sm text-slate-600 dark:text-slate-200">Odpracováno z 300h</span>
                                         <span className={`font-black text-lg ${monthlyData.yearlyDPPHrs >= 300 ? 'text-rose-500' : monthlyData.yearlyDPPHrs >= 250 ? 'text-orange-500' : 'text-amber-500'}`}>
-                                            {monthlyData.yearlyDPPHrs.toFixed(2).replace('.', ',')}h
+                                            {formatHrs(monthlyData.yearlyDPPHrs * 60)}
                                         </span>
                                     </div>
                                     <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -945,9 +826,8 @@
                                 </div>
                             )}
 
-                            {/* Sekce Osvobozené příjmy s možností vypnout na konkrétní měsíc */}
                             {settings.uniformEnabled && (
-                                <div className="bg-emerald-50/50 dark:bg-emerald-950/10 p-6 rounded-[2.5rem] border border-emerald-100 dark:border-emerald-900/40 space-y-4 shadow-sm">
+                                <div className="bg-emerald-50/50 dark:bg-emerald-950/20 p-6 rounded-[2.5rem] border border-emerald-100 dark:border-emerald-900/40 space-y-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none">
                                     <div className="flex items-center justify-between border-b border-emerald-100 dark:border-emerald-900/30 pb-2">
                                         <h3 className="font-bold text-[10px] uppercase text-emerald-600 dark:text-emerald-400 tracking-widest flex items-center gap-2">
                                             <i className="fa-solid fa-shirt"></i>
@@ -959,14 +839,11 @@
                                                 onClick={() => {
                                                     const mKey = `${year}-${String(month+1).padStart(2, '0')}`;
                                                     const nextDisabled = { ...settings.disabledUniformMonths };
-                                                    if (nextDisabled[mKey]) {
-                                                        delete nextDisabled[mKey];
-                                                    } else {
-                                                        nextDisabled[mKey] = true;
-                                                    }
+                                                    if (nextDisabled[mKey]) delete nextDisabled[mKey];
+                                                    else nextDisabled[mKey] = true;
                                                     saveSettings({ ...settings, disabledUniformMonths: nextDisabled });
                                                 }}
-                                                className={`w-10 h-5 rounded-full relative transition-colors ${monthlyData.isUniformActive ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                className={`w-10 h-5 rounded-full relative transition-colors shadow-inner ${monthlyData.isUniformActive ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'}`}
                                             >
                                                 <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform shadow-sm ${monthlyData.isUniformActive ? 'translate-x-5' : 'translate-x-1'}`}></div>
                                             </button>
@@ -984,18 +861,15 @@
                                                         onChange={e => {
                                                             const val = e.target.value;
                                                             const newCustomRates = { ...settings.customUniformRates };
-                                                            if (val === '') {
-                                                                delete newCustomRates[`${year}-${String(month+1).padStart(2, '0')}`];
-                                                            } else {
-                                                                newCustomRates[`${year}-${String(month+1).padStart(2, '0')}`] = parseFloat(val) || 0;
-                                                            }
+                                                            if (val === '') delete newCustomRates[`${year}-${String(month+1).padStart(2, '0')}`];
+                                                            else newCustomRates[`${year}-${String(month+1).padStart(2, '0')}`] = parseFloat(val) || 0;
                                                             saveSettings({ ...settings, customUniformRates: newCustomRates });
                                                         }}
                                                         placeholder={settings.uniformRate}
                                                         className={`w-12 font-bold bg-transparent outline-none text-right border-b focus:border-emerald-500 transition-colors ${settings.customUniformRates?.[`${year}-${String(month+1).padStart(2, '0')}`] !== undefined ? 'text-emerald-900 dark:text-emerald-100 border-emerald-300 dark:border-emerald-700' : 'text-emerald-700/50 dark:text-emerald-300/50 border-transparent'}`}
                                                     /> Kč/hod)
                                                 </span>
-                                                <span className="font-bold">{Math.round(monthlyData.uniformPay).toLocaleString()} Kč</span>
+                                                <span className="font-bold">{Math.round(monthlyData.uniformPay).toLocaleString('cs-CZ')} Kč</span>
                                             </div>
                                             <div className="text-[11px] leading-relaxed opacity-80">
                                                 * Odpracováno {formatHrs(monthlyData.workedHrsOnly * 60)}. Tento příjem nepodléhá dani z příjmů, sociálnímu ani zdravotnímu pojištění.
@@ -1009,224 +883,228 @@
                                 </div>
                             )}
 
-                            {/* Odvody a Pojistné */}
-                            <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm">
-                                <h3 className="font-bold text-[10px] uppercase text-slate-400 border-b dark:border-slate-800 pb-2 tracking-widest flex justify-between items-center">
+                            <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-100 dark:border-slate-800/60 space-y-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none">
+                                <h3 className="font-bold text-[10px] uppercase text-slate-400 border-b border-slate-100 dark:border-slate-800/60 pb-2 tracking-widest flex justify-between items-center">
                                     <span>ODVODY A POJISTNÉ</span>
                                     <i className="fa-solid fa-building-columns"></i>
                                 </h3>
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-sm">
                                         <span>Sociální poj. (7,1 %)</span>
-                                        <span className="font-bold text-rose-500">-{Math.round(monthlyData.soc).toLocaleString()} Kč</span>
+                                        <span className="font-bold text-rose-500">-{Math.round(monthlyData.soc).toLocaleString('cs-CZ')} Kč</span>
                                     </div>
                                     <div className="flex justify-between text-sm">
                                         <span>Zdravotní poj. (4,5 %)</span>
-                                        <span className="font-bold text-rose-500">-{Math.round(monthlyData.zdra).toLocaleString()} Kč</span>
+                                        <span className="font-bold text-rose-500">-{Math.round(monthlyData.zdra).toLocaleString('cs-CZ')} Kč</span>
                                     </div>
-                                    <div className="flex justify-between text-sm border-t border-dashed dark:border-slate-800 pt-2">
+                                    <div className="flex justify-between text-sm border-t border-dashed border-slate-100 dark:border-slate-800/60 pt-2">
                                         <span>Záloha na daň (15 %)</span>
-                                        <span className="font-bold text-rose-500">-{Math.round(monthlyData.rawTax).toLocaleString()} Kč</span>
+                                        <span className="font-bold text-rose-500">-{Math.round(monthlyData.rawTax).toLocaleString('cs-CZ')} Kč</span>
                                     </div>
                                     {monthlyData.appliedDiscount > 0 && (
                                         <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400 font-semibold">
                                             <span>Uplatněná sleva na poplatníka</span>
-                                            <span className="font-bold text-emerald-500">+{Math.round(monthlyData.appliedDiscount).toLocaleString()} Kč</span>
+                                            <span className="font-bold text-emerald-500">+{Math.round(monthlyData.appliedDiscount).toLocaleString('cs-CZ')} Kč</span>
                                         </div>
                                     )}
-                                    <div className="flex justify-between text-sm font-black border-t dark:border-slate-800 pt-2 text-slate-800 dark:text-slate-200">
+                                    <div className="flex justify-between text-sm font-black border-t border-slate-100 dark:border-slate-800/60 pt-2 text-slate-800 dark:text-slate-200">
                                         <span>Celkem odvody</span>
-                                        <span className="text-rose-600">-{Math.round(monthlyData.soc + monthlyData.zdra + Math.max(0, monthlyData.rawTax - monthlyData.appliedDiscount)).toLocaleString()} Kč</span>
+                                        <span className="text-rose-600">-{Math.round(monthlyData.soc + monthlyData.zdra + Math.max(0, monthlyData.rawTax - monthlyData.appliedDiscount)).toLocaleString('cs-CZ')} Kč</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* --- STREAMING_CHUNK: Enhanced Settings Tab for Uniform and Quarterly Average Rate Configuration --- */}
+                    {/* --- STREAMING_CHUNK: Enhanced Settings Tab (iOS Lists Design) --- */}
                     {activeTab === 'settings' && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 space-y-6 shadow-sm">
-                                <div>
-                                    <h3 className="font-bold text-xs uppercase text-slate-400 mb-4 tracking-widest text-center px-1">Obecné</h3>
-                                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl">
+                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300 px-1">
+                            
+                            {/* Obecné */}
+                            <div>
+                                <h3 className="font-bold text-[10px] uppercase text-slate-400 mb-2 tracking-widest pl-4">Obecné</h3>
+                                <div className="bg-white dark:bg-slate-900 rounded-[2rem] overflow-hidden border border-slate-100 dark:border-slate-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none divide-y divide-slate-100 dark:divide-slate-800/60">
+                                    <div className="flex items-center justify-between p-5">
                                         <div className="flex items-center gap-3">
-                                            <div className="bg-slate-200 dark:bg-slate-800 w-10 h-10 rounded-xl flex items-center justify-center text-slate-600 dark:text-slate-400">
+                                            <div className="bg-slate-100 dark:bg-slate-800 w-9 h-9 rounded-xl flex items-center justify-center text-slate-600 dark:text-slate-400">
                                                 <i className="fa-solid fa-moon"></i>
                                             </div>
                                             <span className="font-semibold text-sm">Tmavý režim</span>
                                         </div>
-                                        <button onClick={() => saveSettings({ ...settings, isDark: !settings.isDark })} className={`w-12 h-6 rounded-full transition-colors relative flex items-center ${settings.isDark ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                                        <button onClick={() => saveSettings({ ...settings, isDark: !settings.isDark })} className={`w-12 h-6 rounded-full transition-colors relative flex items-center shadow-inner ${settings.isDark ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
                                             <div className={`w-5 h-5 bg-white rounded-full absolute transition-transform shadow-sm ${settings.isDark ? 'translate-x-6' : 'translate-x-1'}`}></div>
                                         </button>
                                     </div>
                                 </div>
+                            </div>
 
-                                {/* Sekce: Příspěvky a výplata (Uniforma & Průměry) */}
-                                <div>
-                                    <h3 className="font-bold text-xs uppercase text-slate-400 mb-4 tracking-widest text-center px-1">Výbava a Příplatky</h3>
-                                    <div className="space-y-3">
-                                        {/* Aktivace uniformy */}
-                                        <div className="flex flex-col p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl space-y-3">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <i className="fa-solid fa-shirt text-slate-400"></i>
-                                                    <span className="font-semibold text-sm">Údržba uniformy</span>
+                            {/* Výbava a Příplatky */}
+                            <div>
+                                <h3 className="font-bold text-[10px] uppercase text-slate-400 mb-2 tracking-widest pl-4">Výbava a Příplatky</h3>
+                                <div className="bg-white dark:bg-slate-900 rounded-[2rem] overflow-hidden border border-slate-100 dark:border-slate-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none divide-y divide-slate-100 dark:divide-slate-800/60">
+                                    
+                                    <div className="flex flex-col">
+                                        <div className="flex items-center justify-between p-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-emerald-50 dark:bg-emerald-900/20 w-9 h-9 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                                                    <i className="fa-solid fa-shirt"></i>
                                                 </div>
-                                                <button onClick={() => saveSettings({ ...settings, uniformEnabled: !settings.uniformEnabled })} className={`w-12 h-6 rounded-full transition-colors relative flex items-center ${settings.uniformEnabled ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
-                                                    <div className={`w-5 h-5 bg-white rounded-full absolute transition-transform shadow-sm ${settings.uniformEnabled ? 'translate-x-6' : 'translate-x-1'}`}></div>
-                                                </button>
+                                                <span className="font-semibold text-sm">Údržba uniformy</span>
                                             </div>
-                                            {settings.uniformEnabled && (
-                                                <div className="flex items-center justify-between border-t dark:border-slate-800 pt-2">
-                                                    <span className="text-xs text-slate-500 font-semibold">Příspěvek za hodinu</span>
-                                                    <div className="flex items-center gap-1">
-                                                        <input type="number" step="0.5" value={settings.uniformRate} onChange={e => saveSettings({...settings, uniformRate: parseFloat(e.target.value)||0})} className="w-12 font-bold bg-transparent border-b border-slate-300 dark:border-slate-700 outline-none text-right focus:border-emerald-500" />
-                                                        <span className="text-xs font-bold text-slate-400">Kč</span>
-                                                    </div>
-                                                </div>
-                                            )}
+                                            <button onClick={() => saveSettings({ ...settings, uniformEnabled: !settings.uniformEnabled })} className={`w-12 h-6 rounded-full transition-colors relative flex items-center shadow-inner ${settings.uniformEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                                                <div className={`w-5 h-5 bg-white rounded-full absolute transition-transform shadow-sm ${settings.uniformEnabled ? 'translate-x-6' : 'translate-x-1'}`}></div>
+                                            </button>
                                         </div>
-
-                                        {/* Průměr pro náhrady s novým čtvrtletním rozdělením */}
-                                        <div className="flex flex-col p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl space-y-3">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <i className="fa-solid fa-calculator text-slate-400"></i>
-                                                    <span className="font-semibold text-sm">Průměr pro příplatky (DPČ)</span>
+                                        {settings.uniformEnabled && (
+                                            <div className="px-5 pb-5 pt-0 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+                                                <span className="text-xs text-slate-500 font-semibold pl-12">Výchozí příspěvek / hod</span>
+                                                <div className="flex items-center gap-1">
+                                                    <input type="number" step="0.5" value={settings.uniformRate} onChange={e => saveSettings({...settings, uniformRate: parseFloat(e.target.value)||0})} className="w-16 font-bold bg-transparent outline-none text-right text-slate-800 dark:text-slate-100 focus:text-emerald-500 transition-colors" />
+                                                    <span className="text-xs font-bold text-slate-400">Kč</span>
                                                 </div>
-                                                <button onClick={() => saveSettings({ ...settings, useAverageForPremiums: !settings.useAverageForPremiums })} className={`w-12 h-6 rounded-full transition-colors relative flex items-center ${settings.useAverageForPremiums ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
-                                                    <div className={`w-5 h-5 bg-white rounded-full absolute transition-transform shadow-sm ${settings.useAverageForPremiums ? 'translate-x-6' : 'translate-x-1'}`}></div>
-                                                </button>
                                             </div>
-                                            
-                                            {settings.useAverageForPremiums && (
-                                                <div className="border-t dark:border-slate-800 pt-3 space-y-3">
-                                                    <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-widest text-center">Čtvrtletní průměry pro rok {year}</span>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {[1, 2, 3, 4].map(qNum => {
-                                                            const qKey = `${year}-Q${qNum}`;
-                                                            const val = settings.quarterlyAverages?.[qKey] !== undefined ? settings.quarterlyAverages[qKey] : '';
-                                                            return (
-                                                                <div key={qNum} className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-center">
-                                                                    <label className="text-[8px] font-bold uppercase text-slate-400 block mb-0.5">{qNum}. čtvrtletí (Q{qNum})</label>
-                                                                    <div className="flex items-center gap-1 justify-between">
-                                                                        <input 
-                                                                            type="number" 
-                                                                            step="0.01" 
-                                                                            placeholder="0.00"
-                                                                            value={val} 
-                                                                            onChange={e => {
-                                                                                const nextAverages = { ...settings.quarterlyAverages, [qKey]: parseFloat(e.target.value) || 0 };
-                                                                                saveSettings({ ...settings, quarterlyAverages: nextAverages });
-                                                                            }} 
-                                                                            className="w-full font-bold bg-transparent outline-none text-sm text-slate-800 dark:text-slate-100" 
-                                                                        />
-                                                                        <span className="text-[10px] font-bold text-slate-400">Kč</span>
-                                                                    </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex flex-col">
+                                        <div className="flex items-center justify-between p-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-blue-50 dark:bg-blue-900/20 w-9 h-9 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400">
+                                                    <i className="fa-solid fa-calculator"></i>
+                                                </div>
+                                                <span className="font-semibold text-sm">Průměr (DPČ/DPP)</span>
+                                            </div>
+                                            <button onClick={() => saveSettings({ ...settings, useAverageForPremiums: !settings.useAverageForPremiums })} className={`w-12 h-6 rounded-full transition-colors relative flex items-center shadow-inner ${settings.useAverageForPremiums ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                                                <div className={`w-5 h-5 bg-white rounded-full absolute transition-transform shadow-sm ${settings.useAverageForPremiums ? 'translate-x-6' : 'translate-x-1'}`}></div>
+                                            </button>
+                                        </div>
+                                        
+                                        {settings.useAverageForPremiums && (
+                                            <div className="px-5 pb-5 pt-0 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
+                                                <span className="text-[9px] font-bold uppercase text-slate-400 block tracking-widest pl-12">Průměry pro rok {year}</span>
+                                                <div className="grid grid-cols-2 gap-2 pl-12">
+                                                    {[1, 2, 3, 4].map(qNum => {
+                                                        const qKey = `${year}-Q${qNum}`;
+                                                        const val = settings.quarterlyAverages?.[qKey] !== undefined ? settings.quarterlyAverages[qKey] : '';
+                                                        return (
+                                                            <div key={qNum} className="p-2.5 bg-white dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800/60 flex flex-col justify-center">
+                                                                <label className="text-[8px] font-bold uppercase text-slate-400 block mb-0.5">{qNum}. čtvrtletí</label>
+                                                                <div className="flex items-center gap-1 justify-between">
+                                                                    <input type="number" step="0.01" placeholder="0.00" value={val} onChange={e => { const nextAverages = { ...settings.quarterlyAverages, [qKey]: parseFloat(e.target.value) || 0 }; saveSettings({ ...settings, quarterlyAverages: nextAverages }); }} className="w-full font-bold bg-transparent outline-none text-sm text-slate-800 dark:text-slate-100" />
+                                                                    <span className="text-[9px] font-bold text-slate-400">Kč</span>
                                                                 </div>
-                                                            );
-                                                        })}
-                                                    </div>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div>
-                                    <h3 className="font-bold text-xs uppercase text-slate-400 mb-4 tracking-widest text-center px-1">Výchozí hodnoty</h3>
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl">
-                                            <span className="font-semibold text-sm text-slate-600 dark:text-slate-400">Hodinová sazba</span>
-                                            <div className="flex items-center gap-2">
-                                                <input type="number" value={settings.defaultRate} onChange={e => saveSettings({...settings, defaultRate: parseFloat(e.target.value)||0})} className="w-16 font-bold bg-transparent border-b border-slate-300 dark:border-slate-700 outline-none text-right focus:border-blue-500" />
-                                                <span className="text-xs font-bold text-slate-400">Kč</span>
                                             </div>
-                                        </div>
-                                        <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl">
-                                            <span className="font-semibold text-sm text-slate-600 dark:text-slate-400">Typ smlouvy</span>
-                                            <select value={settings.defaultContract} onChange={e => saveSettings({...settings, defaultContract: e.target.value})} className="bg-transparent font-bold outline-none border-b border-slate-300 dark:border-slate-700 py-1 text-right focus:border-blue-500 appearance-none pl-4">
-                                                {Object.keys(contractLabels).map(k => <option key={k} value={k}>{k}</option>)}
-                                            </select>
-                                        </div>
+                                        )}
                                     </div>
                                 </div>
+                            </div>
+                            
+                            {/* Výchozí hodnoty */}
+                            <div>
+                                <h3 className="font-bold text-[10px] uppercase text-slate-400 mb-2 tracking-widest pl-4">Základní hodnoty</h3>
+                                <div className="bg-white dark:bg-slate-900 rounded-[2rem] overflow-hidden border border-slate-100 dark:border-slate-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none divide-y divide-slate-100 dark:divide-slate-800/60">
+                                    <div className="flex items-center justify-between p-5">
+                                        <span className="font-semibold text-sm text-slate-700 dark:text-slate-300 pl-1">Hodinová sazba</span>
+                                        <div className="flex items-center gap-2">
+                                            <input type="number" value={settings.defaultRate} onChange={e => saveSettings({...settings, defaultRate: parseFloat(e.target.value)||0})} className="w-16 font-bold bg-transparent outline-none text-right text-slate-800 dark:text-slate-100 focus:text-blue-500 transition-colors" />
+                                            <span className="text-xs font-bold text-slate-400">Kč</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between p-5">
+                                        <span className="font-semibold text-sm text-slate-700 dark:text-slate-300 pl-1">Typ smlouvy</span>
+                                        <select value={settings.defaultContract} onChange={e => saveSettings({...settings, defaultContract: e.target.value})} className="bg-transparent font-bold outline-none text-right text-slate-800 dark:text-slate-100 focus:text-blue-500 appearance-none pl-4 cursor-pointer">
+                                            {Object.keys(contractLabels).map(k => <option key={k} value={k} className="bg-white dark:bg-slate-900">{k}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
 
-                                <div>
-                                    <h3 className="font-bold text-xs uppercase text-slate-400 mb-4 tracking-widest text-center px-1">Příplatky (%)</h3>
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-2xl">
-                                            <span className="font-semibold text-sm text-indigo-600 dark:text-indigo-400">Noční (<i className="fa-solid fa-bolt text-xs"></i>)</span>
-                                            <div className="flex items-center gap-2">
-                                                <input type="number" value={settings.bonuses.night} onChange={e => saveSettings({...settings, bonuses: {...settings.bonuses, night: parseFloat(e.target.value)||0}})} className="w-12 font-bold bg-transparent border-b border-indigo-200 dark:border-indigo-800 outline-none text-right text-indigo-700 dark:text-indigo-300 focus:border-indigo-500" />
-                                                <span className="text-xs font-bold text-indigo-400">%</span>
+                            {/* Příplatky (%) */}
+                            <div>
+                                <h3 className="font-bold text-[10px] uppercase text-slate-400 mb-2 tracking-widest pl-4">Příplatky (%)</h3>
+                                <div className="bg-white dark:bg-slate-900 rounded-[2rem] overflow-hidden border border-slate-100 dark:border-slate-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none divide-y divide-slate-100 dark:divide-slate-800/60">
+                                    <div className="flex items-center justify-between p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-indigo-50 dark:bg-indigo-900/20 w-9 h-9 rounded-xl flex items-center justify-center text-indigo-500">
+                                                <i className="fa-solid fa-bolt"></i>
                                             </div>
+                                            <span className="font-semibold text-sm">Noční</span>
                                         </div>
-                                        <div className="flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-900/10 rounded-2xl">
-                                            <span className="font-semibold text-sm text-amber-600 dark:text-amber-400">Víkend (<i className="fa-solid fa-star text-xs"></i>)</span>
-                                            <div className="flex items-center gap-2">
-                                                <input type="number" value={settings.bonuses.weekend} onChange={e => saveSettings({...settings, bonuses: {...settings.bonuses, weekend: parseFloat(e.target.value)||0}})} className="w-12 font-bold bg-transparent border-b border-amber-200 dark:border-amber-800 outline-none text-right text-amber-700 dark:text-amber-300 focus:border-amber-500" />
-                                                <span className="text-xs font-bold text-amber-400">%</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-between p-4 bg-rose-50 dark:bg-rose-900/10 rounded-2xl">
-                                            <span className="font-semibold text-sm text-rose-600 dark:text-rose-400">Svátek (<i className="fa-solid fa-champagne-glasses text-xs"></i>)</span>
-                                            <div className="flex items-center gap-2">
-                                                <input type="number" value={settings.bonuses.holiday} onChange={e => saveSettings({...settings, bonuses: {...settings.bonuses, holiday: parseFloat(e.target.value)||0}})} className="w-12 font-bold bg-transparent border-b border-rose-200 dark:border-rose-800 outline-none text-right text-rose-700 dark:text-rose-300 focus:border-rose-500" />
-                                                <span className="text-xs font-bold text-rose-400">%</span>
-                                            </div>
+                                        <div className="flex items-center gap-2">
+                                            <input type="number" value={settings.bonuses.night} onChange={e => saveSettings({...settings, bonuses: {...settings.bonuses, night: parseFloat(e.target.value)||0}})} className="w-12 font-bold bg-transparent outline-none text-right text-slate-800 dark:text-slate-100 focus:text-indigo-500 transition-colors" />
+                                            <span className="text-xs font-bold text-indigo-400">%</span>
                                         </div>
                                     </div>
-                                </div>
-                                
-                                <div>
-                                    <h3 className="font-bold text-xs uppercase text-slate-400 mb-4 tracking-widest text-center px-1">Slevy na dani (měsíčně)</h3>
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl">
-                                            <span className="font-semibold text-sm text-slate-600 dark:text-slate-400">Poplatník</span>
-                                            <div className="flex items-center gap-2">
-                                                <input type="number" value={settings.discounts.taxpayer} onChange={e => saveSettings({...settings, discounts: {...settings.discounts, taxpayer: parseFloat(e.target.value)||0}})} className="w-16 font-bold bg-transparent border-b border-slate-300 dark:border-slate-700 outline-none text-right focus:border-blue-500" />
-                                                <span className="text-xs font-bold text-slate-400">Kč</span>
+                                    <div className="flex items-center justify-between p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-amber-50 dark:bg-amber-900/20 w-9 h-9 rounded-xl flex items-center justify-center text-amber-500">
+                                                <i className="fa-solid fa-star"></i>
                                             </div>
+                                            <span className="font-semibold text-sm">Víkend</span>
                                         </div>
-                                        <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl">
-                                            <span className="font-semibold text-sm text-slate-600 dark:text-slate-400">Děti celkem</span>
-                                            <div className="flex items-center gap-2">
-                                                <input type="number" value={settings.discounts.kids} onChange={e => saveSettings({...settings, discounts: {...settings.discounts, kids: parseFloat(e.target.value)||0}})} className="w-16 font-bold bg-transparent border-b border-slate-300 dark:border-slate-700 outline-none text-right focus:border-blue-500" />
-                                                <span className="text-xs font-bold text-slate-400">Kč</span>
+                                        <div className="flex items-center gap-2">
+                                            <input type="number" value={settings.bonuses.weekend} onChange={e => saveSettings({...settings, bonuses: {...settings.bonuses, weekend: parseFloat(e.target.value)||0}})} className="w-12 font-bold bg-transparent outline-none text-right text-slate-800 dark:text-slate-100 focus:text-amber-500 transition-colors" />
+                                            <span className="text-xs font-bold text-amber-400">%</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-rose-50 dark:bg-rose-900/20 w-9 h-9 rounded-xl flex items-center justify-center text-rose-500">
+                                                <i className="fa-solid fa-champagne-glasses text-xs"></i>
                                             </div>
+                                            <span className="font-semibold text-sm">Svátek</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <input type="number" value={settings.bonuses.holiday} onChange={e => saveSettings({...settings, bonuses: {...settings.bonuses, holiday: parseFloat(e.target.value)||0}})} className="w-12 font-bold bg-transparent outline-none text-right text-slate-800 dark:text-slate-100 focus:text-rose-500 transition-colors" />
+                                            <span className="text-xs font-bold text-rose-400">%</span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             
-                            <div className="bg-slate-100 dark:bg-slate-900 rounded-[2.5rem] p-6 text-center space-y-4">
-                                <div className="w-16 h-16 mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center text-blue-600 dark:text-blue-400 text-2xl border border-slate-200 dark:border-slate-700">
-                                    <i className="fa-solid fa-user-shield"></i>
+                            {/* Slevy na dani */}
+                            <div>
+                                <h3 className="font-bold text-[10px] uppercase text-slate-400 mb-2 tracking-widest pl-4">Slevy na dani (měsíčně)</h3>
+                                <div className="bg-white dark:bg-slate-900 rounded-[2rem] overflow-hidden border border-slate-100 dark:border-slate-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none divide-y divide-slate-100 dark:divide-slate-800/60">
+                                    <div className="flex items-center justify-between p-5">
+                                        <span className="font-semibold text-sm text-slate-700 dark:text-slate-300 pl-1">Poplatník</span>
+                                        <div className="flex items-center gap-2">
+                                            <input type="number" value={settings.discounts.taxpayer} onChange={e => saveSettings({...settings, discounts: {...settings.discounts, taxpayer: parseFloat(e.target.value)||0}})} className="w-16 font-bold bg-transparent outline-none text-right text-slate-800 dark:text-slate-100 focus:text-blue-500 transition-colors" />
+                                            <span className="text-xs font-bold text-slate-400">Kč</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between p-5">
+                                        <span className="font-semibold text-sm text-slate-700 dark:text-slate-300 pl-1">Děti celkem</span>
+                                        <div className="flex items-center gap-2">
+                                            <input type="number" value={settings.discounts.kids} onChange={e => saveSettings({...settings, discounts: {...settings.discounts, kids: parseFloat(e.target.value)||0}})} className="w-16 font-bold bg-transparent outline-none text-right text-slate-800 dark:text-slate-100 focus:text-blue-500 transition-colors" />
+                                            <span className="text-xs font-bold text-slate-400">Kč</span>
+                                        </div>
+                                    </div>
                                 </div>
+                            </div>
+
+                            <div className="pt-4 text-center space-y-4">
                                 <div>
                                     <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-1">Přihlášen jako</p>
                                     <p className="font-black text-lg">{profileName || 'Uživatel'}</p>
-                                    <p className="text-xs font-bold text-slate-400 font-mono mt-1 px-3 py-1 bg-white dark:bg-slate-800 rounded-lg inline-block border border-slate-200 dark:border-slate-700 shadow-sm">ID: <span className="text-slate-600 dark:text-slate-300">{activePin}</span></p>
+                                    <p className="text-[10px] font-bold text-slate-400 font-mono mt-1 px-3 py-1 bg-white dark:bg-slate-800 rounded-lg inline-block border border-slate-100 dark:border-slate-800/60 shadow-sm">ID: <span className="text-slate-600 dark:text-slate-300">{activePin}</span></p>
                                 </div>
-                                <button onClick={handleLogout} className="w-full mt-4 py-4 rounded-2xl font-bold text-sm text-rose-500 bg-rose-50 dark:bg-rose-900/20 active:scale-95 transition-transform flex items-center justify-center gap-2">
+                                <button onClick={handleLogout} className="w-full py-4 rounded-2xl font-bold text-sm text-rose-500 bg-rose-50 dark:bg-rose-900/20 active:scale-95 transition-transform flex items-center justify-center gap-2">
                                     <i className="fa-solid fa-arrow-right-from-bracket"></i> ODHLÁSIT SE
                                 </button>
-                                <p className="text-[10px] text-slate-400 mt-4 max-w-xs mx-auto leading-relaxed">
+                                <p className="text-[10px] text-slate-400 max-w-xs mx-auto leading-relaxed pb-4">
                                     Aplikace je uložena v tomto prohlížeči. Odhlášením vymažeš lokální data a budeš potřebovat své ID pro opětovné přihlášení.
                                 </p>
                             </div>
                         </div>
                     )}
 
-                    {/* Spodní Plovoucí Menu */}
-                    <nav className="fixed bottom-6 left-4 right-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/60 dark:border-slate-800/60 rounded-[2rem] py-2 px-4 flex justify-around items-center z-40 shadow-2xl shadow-slate-200/50 dark:shadow-none">
-                        {[
-                            { id: 'calendar', icon: 'fa-calendar-days', label: 'Měsíc' },
-                            { id: 'list', icon: 'fa-list', label: 'Směny' },
-                            { id: 'payslip', icon: 'fa-file-invoice-dollar', label: 'Výplatnice' }
-                        ].map(t => (
+                    <nav className="fixed bottom-6 left-4 right-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-100 dark:border-slate-800/60 rounded-[2rem] py-2 px-4 flex justify-around items-center z-40 shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-none">
+                        {[{ id: 'calendar', icon: 'fa-calendar-days', label: 'Měsíc' }, { id: 'list', icon: 'fa-list', label: 'Směny' }, { id: 'payslip', icon: 'fa-file-invoice-dollar', label: 'Výplatnice' }].map(t => (
                             <button key={t.id} onClick={() => setActiveTab(t.id)} className={`relative flex flex-col items-center justify-center w-16 h-14 rounded-2xl transition-all duration-300 ${activeTab === t.id ? 'text-blue-600 dark:text-blue-400 bg-blue-50/70 dark:bg-blue-900/30' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>
                                 <i className={`fa-solid ${t.icon} text-[20px] mb-1 transition-transform duration-300 ${activeTab === t.id ? 'scale-110 drop-shadow-sm' : ''}`}></i>
                                 <span className={`text-[8px] uppercase tracking-widest ${activeTab === t.id ? 'font-black' : 'font-semibold'}`}>{t.label}</span>
@@ -1246,10 +1124,8 @@
                                     <button onClick={() => setEditingDate(null)} className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-500 active:scale-90 transition-transform"><i className="fa-solid fa-xmark text-lg"></i></button>
                                 </div>
 
-                                {/* Animovaný přepínač typu směny */}
                                 <div className="relative flex bg-slate-100 dark:bg-slate-900 p-1.5 rounded-2xl mb-6 overflow-hidden">
                                     <div className={`absolute top-1.5 bottom-1.5 w-[calc(33.33%-4px)] bg-white dark:bg-slate-800 rounded-xl shadow-sm transition-all duration-300 ease-out ${editorType === 'work' ? 'left-1.5' : editorType === 'vacation' ? 'left-[calc(33.33%+2px)]' : 'left-[calc(66.66%+2px)]'}`}></div>
-                                    
                                     <button onClick={() => { setEditorType('work'); }} className={`relative z-10 flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-300 ${editorType === 'work' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 hover:text-slate-700'}`}>SMĚNA</button>
                                     <button onClick={() => { setEditorType('vacation'); setHoursValue('8'); }} className={`relative z-10 flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-300 ${editorType === 'vacation' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 hover:text-slate-700'}`}>DOVOLENÁ</button>
                                     <button onClick={() => { setEditorType('sick'); setHoursValue('8'); }} className={`relative z-10 flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-300 ${editorType === 'sick' ? 'text-orange-600 dark:text-orange-400' : 'text-slate-500 hover:text-slate-700'}`}>NEMOCENSKÁ</button>
@@ -1260,11 +1136,8 @@
                                         <>
                                             <div className="text-center">
                                                 <label className="text-[10px] font-bold text-slate-400 block mb-3 uppercase tracking-widest text-center">Čas směny</label>
-                                                
-                                                {/* Sloučený, elegantní blok pro zadávání času */}
                                                 <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-2 rounded-3xl border border-slate-200 dark:border-slate-800 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all max-w-[280px] mx-auto shadow-sm">
                                                     
-                                                    {/* OD (Autoformat input) */}
                                                     <div className="flex items-center bg-white dark:bg-slate-900 px-3 py-2 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/80">
                                                         <input 
                                                             type="text" 
@@ -1293,7 +1166,6 @@
 
                                                     <i className="fa-solid fa-arrow-right-long text-slate-300 dark:text-slate-600 text-sm"></i>
 
-                                                    {/* DO (Autoformat input) */}
                                                     <div className="flex items-center bg-white dark:bg-slate-900 px-3 py-2 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/80">
                                                         <input 
                                                             type="text" 
@@ -1321,19 +1193,14 @@
                                                     </div>
                                                 </div>
 
-                                                {/* Dynamický čas směny */}
                                                 {liveDuration ? (
                                                     <div className="mt-4 inline-flex items-center gap-2 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 py-2.5 px-5 rounded-2xl font-bold text-xs transition-all animate-in animate-duration-150">
                                                         <i className="fa-regular fa-clock text-sm"></i>
                                                         <span>Celkem odpracováno: {liveDuration.netHours}h {String(liveDuration.netMins).padStart(2, '0')}m</span>
-                                                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest pl-1.5 border-l border-slate-200 dark:border-slate-800">
-                                                            pauza {liveDuration.breakMins}m
-                                                        </span>
+                                                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest pl-1.5 border-l border-slate-200 dark:border-slate-800">pauza {liveDuration.breakMins}m</span>
                                                     </div>
                                                 ) : (
-                                                    <div className="mt-4 text-[10px] text-slate-400 italic">
-                                                        Zadejte časy pro výpočet délky směny
-                                                    </div>
+                                                    <div className="mt-4 text-[10px] text-slate-400 italic">Zadejte časy pro výpočet délky směny</div>
                                                 )}
                                             </div>
                                             <div className="grid grid-cols-2 gap-4">
@@ -1384,9 +1251,9 @@
                                     </div>
                                 </div>
 
-                                <div className="flex gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                                <div className="flex gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/60">
                                     {shifts[editingDate] && (
-                                        <button onClick={async () => { await db.collection(`shifts_${activePin}`).doc(editingDate).delete(); setEditingDate(null); }} className="p-4 bg-rose-50 dark:bg-rose-900/20 text-rose-500 rounded-2xl active:scale-95 transition-transform aspect-square flex items-center justify-center">
+                                        <button onClick={async () => { await db.collection(`shifts_${activePin}`).doc(editingDate).delete(); setEditingDate(null); }} className="p-4 bg-rose-50 dark:bg-rose-900/20 text-rose-500 rounded-2xl active:scale-95 transition-transform aspect-square flex items-center justify-center shadow-sm">
                                             <i className="fa-solid fa-trash"></i>
                                         </button>
                                     )}
@@ -1409,74 +1276,31 @@
                                     </div>
                                     <button type="button" onClick={() => { setShowBulkModal(false); setBulkStatus(''); }} className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-500 active:scale-90 transition-transform"><i className="fa-solid fa-xmark text-lg"></i></button>
                                 </div>
-
                                 <div className="space-y-4">
                                     <div>
                                         <label className="text-[10px] font-bold uppercase text-slate-400 mb-2 block tracking-widest">Nová hodinová sazba</label>
                                         <div className="relative">
                                             <i className="fa-solid fa-coins absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                                            <input 
-                                                type="number" 
-                                                required 
-                                                value={bulkRate} 
-                                                onChange={e => setBulkRate(e.target.value)} 
-                                                placeholder="Napiš novou sazbu (např. 140)" 
-                                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 pl-12 font-bold outline-none focus:ring-2 ring-blue-500 text-slate-900 dark:text-white" 
-                                            />
+                                            <input type="number" required value={bulkRate} onChange={e => setBulkRate(e.target.value)} placeholder="Napiš novou sazbu (např. 140)" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 pl-12 font-bold outline-none focus:ring-2 ring-blue-500 text-slate-900 dark:text-white" />
                                         </div>
                                     </div>
-
                                     <div>
                                         <label className="text-[10px] font-bold uppercase text-slate-400 mb-2 block tracking-widest">Filtrovat typ směny</label>
-                                        <select 
-                                            value={bulkTypeFilter} 
-                                            onChange={e => setBulkTypeFilter(e.target.value)} 
-                                            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 font-bold outline-none focus:ring-2 ring-blue-500 text-slate-900 dark:text-white"
-                                        >
-                                            <option value="all">Všechny (Práce, Dovolená, Nemoc)</option>
-                                            <option value="work">Pouze odpracovaná práce</option>
-                                            <option value="vacation">Pouze dovolená</option>
-                                            <option value="sick">Pouze nemocenská</option>
+                                        <select value={bulkTypeFilter} onChange={e => setBulkTypeFilter(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 font-bold outline-none focus:ring-2 ring-blue-500 text-slate-900 dark:text-white">
+                                            <option value="all">Všechny (Práce, Dovolená, Nemoc)</option><option value="work">Pouze odpracovaná práce</option><option value="vacation">Pouze dovolená</option><option value="sick">Pouze nemocenská</option>
                                         </select>
                                     </div>
-
                                     <div>
                                         <label className="text-[10px] font-bold uppercase text-slate-400 mb-2 block tracking-widest">Filtrovat podle smlouvy</label>
-                                        <select 
-                                            value={bulkContractFilter} 
-                                            onChange={e => setBulkContractFilter(e.target.value)} 
-                                            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 font-bold outline-none focus:ring-2 ring-blue-500 text-slate-900 dark:text-white"
-                                        >
-                                            <option value="all">Všechny smlouvy</option>
-                                            <option value="HPP">Pouze Pracovní poměr (HPP)</option>
-                                            <option value="DPČ">Pouze Dohoda DPČ</option>
-                                            <option value="DPP">Pouze Dohoda DPP</option>
+                                        <select value={bulkContractFilter} onChange={e => setBulkContractFilter(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 font-bold outline-none focus:ring-2 ring-blue-500 text-slate-900 dark:text-white">
+                                            <option value="all">Všechny smlouvy</option><option value="HPP">Pouze Pracovní poměr (HPP)</option><option value="DPČ">Pouze Dohoda DPČ</option><option value="DPP">Pouze Dohoda DPP</option>
                                         </select>
                                     </div>
-
-                                    {bulkStatus && (
-                                        <div className="p-3 bg-blue-50 dark:bg-slate-900/50 rounded-xl text-center text-xs font-bold text-blue-600 dark:text-blue-400">
-                                            {bulkStatus}
-                                        </div>
-                                    )}
+                                    {bulkStatus && <div className="p-3 bg-blue-50 dark:bg-slate-900/50 rounded-xl text-center text-xs font-bold text-blue-600 dark:text-blue-400">{bulkStatus}</div>}
                                 </div>
-
-                                <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-                                    <button 
-                                        type="button" 
-                                        onClick={() => { setShowBulkModal(false); setBulkStatus(''); }} 
-                                        className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold rounded-2xl active:scale-95 transition-transform"
-                                    >
-                                        Zrušit
-                                    </button>
-                                    <button 
-                                        type="submit" 
-                                        disabled={bulkLoading}
-                                        className="flex-1 bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-xl shadow-blue-200 dark:shadow-none active:scale-95 transition-transform flex items-center justify-center gap-2"
-                                    >
-                                        {bulkLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-bolt"></i>}
-                                        Uplatnit
-                                    </button>
+                                <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800/60">
+                                    <button type="button" onClick={() => { setShowBulkModal(false); setBulkStatus(''); }} className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold rounded-2xl active:scale-95 transition-transform shadow-sm">Zrušit</button>
+                                    <button type="submit" disabled={bulkLoading} className="flex-1 bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-xl shadow-blue-200 dark:shadow-none active:scale-95 transition-transform flex items-center justify-center gap-2">{bulkLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-bolt"></i>}Uplatnit</button>
                                 </div>
                             </form>
                         </div>
