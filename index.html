@@ -378,15 +378,33 @@
             const touchStartY = useRef(0);
             const touchEndY = useRef(0);
 
+            // Export přehledu a konfigurace zprávy
+            const [showExportModal, setShowExportModal] = useState(false);
+            const [exportFormat, setExportFormat] = useState('text'); // 'text' | 'compact' | 'csv'
+            const [exportConfig, setExportConfig] = useState({
+                includeHeader: true,
+                includeShiftList: true,
+                includeShiftTimes: true,
+                includeShiftHours: true,
+                includeShiftPay: true,
+                includeContractType: true,
+                includeWorkedHours: true,
+                includeGross: true,
+                includeBonuses: true,
+                includeDeductions: true,
+                includeUniform: true,
+                includeNetTotal: true
+            });
+
             const [nowTick, setNowTick] = useState(() => Date.now());
             const [demoLiveMode, setDemoLiveMode] = useState(() => localStorage.getItem('wt-demo-live') === 'true');
             const [showCelebration, setShowCelebration] = useState(false);
 
-            // Živý časovač pro aktualizaci statistik každou sekundu
+            // Živý časovač pro plynulou aktualizaci statistik každých 200 ms
             useEffect(() => {
                 const timer = setInterval(() => {
                     setNowTick(Date.now());
-                }, 1000);
+                }, 200);
                 return () => clearInterval(timer);
             }, []);
 
@@ -403,6 +421,8 @@
                 discounts: { taxpayer: 2570, kids: 0 },
                 uniformEnabled: true,       
                 uniformRate: 5,             
+                liveShiftEnabled: true,
+                showOffDaysInList: false,
                 disabledUniformMonths: {},  
                 customUniformRates: {}, 
                 quarterlyAverages: {        
@@ -503,6 +523,12 @@
                 localStorage.setItem('shift-theme', settings.isDark ? 'dark' : 'light');
             }, [settings.isDark]);
 
+            useEffect(() => {
+                if (settings.liveShiftEnabled === false && activeTab === 'live') {
+                    setActiveTab('calendar');
+                }
+            }, [settings.liveShiftEnabled, activeTab]);
+
             const saveSettings = async (newSettings) => {
                 setSettings(newSettings);
                 if (activePin) await db.collection('settings').doc(activePin).set(newSettings);
@@ -535,6 +561,7 @@
 
             // Detekce právě probíhající směny v reálném čase
             const currentActiveShift = useMemo(() => {
+                if (settings.liveShiftEnabled === false) return null;
                 const now = new Date(nowTick);
                 
                 // Demo režim pro testování a motivaci kdykoliv
@@ -603,7 +630,7 @@
                 return null;
             }, [nowTick, demoLiveMode, shifts, settings]);
 
-            // Živé statistiky směny aktualizované každou sekundu
+            // Živé statistiky směny aktualizované plynule každých 200 ms
             const liveShiftStats = useMemo(() => {
                 if (!currentActiveShift) return null;
 
@@ -611,11 +638,12 @@
                 const start = currentActiveShift.startTime;
                 const end = currentActiveShift.endTime;
 
-                const totalSeconds = Math.max(1, Math.round((end.getTime() - start.getTime()) / 1000));
-                const elapsedSeconds = Math.max(0, Math.min(totalSeconds, Math.round((now.getTime() - start.getTime()) / 1000)));
-                const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
+                const totalSeconds = Math.max(1, (end.getTime() - start.getTime()) / 1000);
+                const elapsedSecondsExact = Math.max(0, Math.min(totalSeconds, (now.getTime() - start.getTime()) / 1000));
+                const elapsedSeconds = Math.floor(elapsedSecondsExact);
+                const remainingSeconds = Math.max(0, Math.ceil(totalSeconds - elapsedSecondsExact));
 
-                const progressPct = Math.min(100, Math.max(0, (elapsedSeconds / totalSeconds) * 100));
+                const progressPct = Math.min(100, Math.max(0, (elapsedSecondsExact / totalSeconds) * 100));
 
                 const formatDuration = (sec) => {
                     const h = Math.floor(sec / 3600);
@@ -650,24 +678,26 @@
                 const uniformPerSec = isUniformActive ? (uniformRate / 3600) : 0;
                 const moneyPerSec = basePerSec + uniformPerSec;
 
-                // Vydělané peníze rostoucí každou sekundu
-                const earnedGross = Math.max(0, Math.min((totalSeconds * moneyPerSec), elapsedSeconds * moneyPerSec));
+                // Vydělané peníze rostoucí plynule v reálném čase
+                const earnedGross = Math.max(0, Math.min((totalSeconds * moneyPerSec), elapsedSecondsExact * moneyPerSec));
 
                 const isHpp = currentActiveShift.contractType === 'HPP';
                 const netRatio = isHpp ? 0.81 : (currentActiveShift.contractType === 'DPP' ? 0.85 : 0.79);
-                const earnedNet = (earnedGross - (isUniformActive ? elapsedSeconds * uniformPerSec : 0)) * netRatio + (isUniformActive ? elapsedSeconds * uniformPerSec : 0);
+                const earnedNet = (earnedGross - (isUniformActive ? elapsedSecondsExact * uniformPerSec : 0)) * netRatio + (isUniformActive ? elapsedSecondsExact * uniformPerSec : 0);
 
                 const totalExpectedGross = (workedHoursTotal * hourlyRate * bonusMultiplier) + (isUniformActive ? workedHoursTotal * uniformRate : 0);
                 const totalExpectedNet = (totalExpectedGross - (isUniformActive ? workedHoursTotal * uniformRate : 0)) * netRatio + (isUniformActive ? workedHoursTotal * uniformRate : 0);
 
                 // Ekvivalenty
                 const beersEarned = (earnedGross / 55);
-                const coffeesEarned = (earnedGross / 65);
+                const petShopsEarned = (earnedGross / 150);
                 const lunchesEarned = (earnedGross / 185);
                 const fuelLiters = (earnedGross / 38);
 
                 const secToNextBeer = Math.max(0, Math.ceil((55 - (earnedGross % 55)) / Math.max(0.01, moneyPerSec)));
-                const secToNextCoffee = Math.max(0, Math.ceil((65 - (earnedGross % 65)) / Math.max(0.01, moneyPerSec)));
+                const secToNextPetShop = Math.max(0, Math.ceil((150 - (earnedGross % 150)) / Math.max(0.01, moneyPerSec)));
+                const secToNextLunch = Math.max(0, Math.ceil((185 - (earnedGross % 185)) / Math.max(0.01, moneyPerSec)));
+                const secToNextFuel = Math.max(0, Math.ceil((38 - (earnedGross % 38)) / Math.max(0.01, moneyPerSec)));
 
                 let motivationalQuote = { title: 'Směna zahájena!', text: 'Dej si ranní kávu, nalaď se a jdeme na to! ☕️', icon: 'fa-mug-hot', color: 'from-blue-600 to-indigo-600' };
                 if (progressPct >= 95) {
@@ -690,6 +720,7 @@
                     end,
                     totalSeconds,
                     elapsedSeconds,
+                    elapsedSecondsExact,
                     remainingSeconds,
                     progressPct,
                     elapsedFormatted: formatDuration(elapsedSeconds),
@@ -707,11 +738,13 @@
                     isUniformActive,
                     uniformRate,
                     beersEarned,
-                    coffeesEarned,
+                    petShopsEarned,
                     lunchesEarned,
                     fuelLiters,
                     secToNextBeer,
-                    secToNextCoffee,
+                    secToNextPetShop,
+                    secToNextLunch,
+                    secToNextFuel,
                     motivationalQuote
                 };
             }, [nowTick, currentActiveShift, settings, holidays]);
@@ -990,44 +1023,284 @@
                 };
             }, [monthlyData, year, month]);
 
-            // Copy Payslip Summary with Day-by-Day Shift Breakdown to Clipboard
-            const handleCopySummary = () => {
-                const monthName = new Intl.DateTimeFormat('cs-CZ', { month: 'long', year: 'numeric' }).format(currentDate);
-                
-                let shiftsBreakdown = '';
-                if (monthlyData.list.length === 0) {
-                    shiftsBreakdown = '• Žádné zapsané směny v tomto měsíci';
+            // Seskupení směn v měsíci podle kalendářních týdnů s mezisoučty
+            const weeklyGroups = useMemo(() => {
+                const groupsMap = new Map();
+
+                if (!settings.showOffDaysInList) {
+                    if (!monthlyData.list || monthlyData.list.length === 0) return [];
+
+                    monthlyData.list.forEach(s => {
+                        const d = new Date(s.date + 'T00:00:00');
+                        const dayOfWeek = (d.getDay() + 6) % 7; // Po = 0 ... Ne = 6
+                        const mon = new Date(d);
+                        mon.setDate(d.getDate() - dayOfWeek);
+                        const sun = new Date(mon);
+                        sun.setDate(mon.getDate() + 6);
+
+                        // ISO číslo týdne
+                        const temp = new Date(d.valueOf());
+                        temp.setDate(temp.getDate() - dayOfWeek + 3);
+                        const firstThu = temp.valueOf();
+                        temp.setMonth(0, 1);
+                        if (temp.getDay() !== 4) temp.setMonth(0, 1 + ((4 - temp.getDay()) + 7) % 7);
+                        const weekNum = 1 + Math.ceil((firstThu - temp) / 604800000);
+
+                        const weekKey = `${mon.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+                        if (!groupsMap.has(weekKey)) {
+                            groupsMap.set(weekKey, {
+                                weekNum,
+                                mon,
+                                sun,
+                                days: [],
+                                totalMinutes: 0,
+                                totalGross: 0,
+                                shiftCount: 0
+                            });
+                        }
+                        const group = groupsMap.get(weekKey);
+                        group.days.push({ ...s, isOffDay: false });
+                        group.totalMinutes += s.netMinutes;
+                        const shiftUniformPay = (s.type === 'work' && monthlyData.isUniformActive) ? (s.netMinutes / 60) * monthlyData.activeUniformRate : 0;
+                        group.totalGross += (s.gross + shiftUniformPay);
+                        group.shiftCount += 1;
+                    });
                 } else {
-                    shiftsBreakdown = monthlyData.list.map(s => {
-                        const d = new Date(s.date);
-                        const dayName = new Intl.DateTimeFormat('cs-CZ', { weekday: 'short' }).format(d);
-                        const dateFormatted = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
-                        const typeLabel = s.type === 'vacation' ? 'Dovolená' : s.type === 'sick' ? 'Nemoc' : (s.raw || 'Směna');
-                        const uniformItem = (s.type === 'work' && monthlyData.isUniformActive) ? (s.netMinutes / 60) * monthlyData.activeUniformRate : 0;
-                        const shiftGross = Math.round(s.gross + uniformItem);
-                        return `• ${dayName} ${dateFormatted}: ${typeLabel} (${formatHrs(s.netMinutes)}) – ${shiftGross.toLocaleString('cs-CZ')} Kč [${s.contractType || 'HPP'}]`;
-                    }).join('\n');
+                    for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
+                        const ds = `${year}-${String(month+1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                        const d = new Date(year, month, dayNum);
+                        const dayOfWeek = (d.getDay() + 6) % 7;
+                        const mon = new Date(year, month, dayNum);
+                        mon.setDate(dayNum - dayOfWeek);
+                        const sun = new Date(mon);
+                        sun.setDate(mon.getDate() + 6);
+
+                        const temp = new Date(d.valueOf());
+                        temp.setDate(temp.getDate() - dayOfWeek + 3);
+                        const firstThu = temp.valueOf();
+                        temp.setMonth(0, 1);
+                        if (temp.getDay() !== 4) temp.setMonth(0, 1 + ((4 - temp.getDay()) + 7) % 7);
+                        const weekNum = 1 + Math.ceil((firstThu - temp) / 604800000);
+
+                        const weekKey = `${mon.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+                        if (!groupsMap.has(weekKey)) {
+                            groupsMap.set(weekKey, {
+                                weekNum,
+                                mon,
+                                sun,
+                                days: [],
+                                totalMinutes: 0,
+                                totalGross: 0,
+                                shiftCount: 0
+                            });
+                        }
+                        const group = groupsMap.get(weekKey);
+                        const s = shifts[ds];
+                        if (s) {
+                            group.days.push({ ...s, date: ds, isOffDay: false });
+                            group.totalMinutes += s.netMinutes;
+                            const shiftUniformPay = (s.type === 'work' && monthlyData.isUniformActive) ? (s.netMinutes / 60) * monthlyData.activeUniformRate : 0;
+                            group.totalGross += (s.gross + shiftUniformPay);
+                            group.shiftCount += 1;
+                        } else {
+                            group.days.push({ date: ds, isOffDay: true });
+                        }
+                    }
                 }
 
-                const text = `📊 WageTracker – Přehled za ${monthName}
-👤 Uživatel: ${profileName || 'Uživatel'}
-══════════════════════════════════════
-📅 ROZPIS JEDNOTLIVÝCH SMĚN:
-${shiftsBreakdown}
-══════════════════════════════════════
-⏱ Celkem směn: ${monthlyData.list.length}
-⏱ Celkem hodin: ${formatHrs(monthlyData.actualHrs * 60)} (práce: ${formatHrs(monthlyData.workedHrsOnly * 60)})
-💰 Hrubá mzda: ${Math.round(monthlyData.gross).toLocaleString('cs-CZ')} Kč
-🛡 Odvody celkem: -${Math.round(monthlyData.soc + monthlyData.zdra + Math.max(0, monthlyData.rawTax - monthlyData.appliedDiscount)).toLocaleString('cs-CZ')} Kč
-💵 Čistá mzda: ${Math.round(monthlyData.netWageOnly).toLocaleString('cs-CZ')} Kč
-${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (uniforma): +${Math.round(monthlyData.uniformPay).toLocaleString('cs-CZ')} Kč\n` : ''}══════════════════════════════════════
-💳 CELKEM K VÝPLATĚ: ${Math.round(monthlyData.net).toLocaleString('cs-CZ')} Kč`;
+                groupsMap.forEach(group => {
+                    group.shifts = group.days;
+                });
 
-                navigator.clipboard.writeText(text).then(() => {
-                    showToast('Detailní rozpis směn zkopírován do schránky! 📋');
+                return Array.from(groupsMap.values());
+            }, [monthlyData.list, monthlyData.isUniformActive, monthlyData.activeUniformRate, settings.showOffDaysInList, daysInMonth, year, month, shifts]);
+
+            // Předvolby pro rychlé nastavení exportu
+            const applyExportPreset = (preset) => {
+                if (preset === 'all') {
+                    setExportConfig({
+                        includeHeader: true,
+                        includeShiftList: true,
+                        includeShiftTimes: true,
+                        includeShiftHours: true,
+                        includeShiftPay: true,
+                        includeContractType: true,
+                        includeWorkedHours: true,
+                        includeGross: true,
+                        includeBonuses: true,
+                        includeDeductions: true,
+                        includeUniform: true,
+                        includeNetTotal: true
+                    });
+                    setExportFormat('text');
+                } else if (preset === 'shiftsOnly') {
+                    setExportConfig({
+                        includeHeader: true,
+                        includeShiftList: true,
+                        includeShiftTimes: true,
+                        includeShiftHours: true,
+                        includeShiftPay: false,
+                        includeContractType: false,
+                        includeWorkedHours: true,
+                        includeGross: false,
+                        includeBonuses: false,
+                        includeDeductions: false,
+                        includeUniform: false,
+                        includeNetTotal: false
+                    });
+                } else if (preset === 'financialOnly') {
+                    setExportConfig({
+                        includeHeader: true,
+                        includeShiftList: false,
+                        includeShiftTimes: false,
+                        includeShiftHours: false,
+                        includeShiftPay: false,
+                        includeContractType: false,
+                        includeWorkedHours: true,
+                        includeGross: true,
+                        includeBonuses: true,
+                        includeDeductions: true,
+                        includeUniform: true,
+                        includeNetTotal: true
+                    });
+                }
+            };
+
+            // Generování exportovaného textu na základě uživatelských voleb
+            const generatedExportText = useMemo(() => {
+                const monthName = new Intl.DateTimeFormat('cs-CZ', { month: 'long', year: 'numeric' }).format(currentDate);
+
+                if (exportFormat === 'csv') {
+                    let csv = 'Datum;Den;Typ;Cas;Hodiny;Vydelek_Kc;Uvazek\n';
+                    monthlyData.list.forEach(s => {
+                        const d = new Date(s.date);
+                        const dayName = new Intl.DateTimeFormat('cs-CZ', { weekday: 'short' }).format(d);
+                        const dateStr = `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`;
+                        const typeLabel = s.type === 'vacation' ? 'Dovolená' : s.type === 'sick' ? 'Nemoc' : 'Práce';
+                        const uniformItem = (s.type === 'work' && monthlyData.isUniformActive) ? (s.netMinutes / 60) * monthlyData.activeUniformRate : 0;
+                        const shiftGross = Math.round(s.gross + uniformItem);
+                        csv += `${dateStr};${dayName};${typeLabel};${s.raw || ''};${(s.netMinutes / 60).toFixed(2)};${shiftGross};${s.contractType || 'HPP'}\n`;
+                    });
+                    return csv;
+                }
+
+                let lines = [];
+
+                if (exportConfig.includeHeader) {
+                    lines.push(`📊 WageTracker – Přehled za ${monthName}`);
+                    if (profileName) lines.push(`👤 Uživatel: ${profileName}`);
+                    lines.push('═'.repeat(38));
+                }
+
+                if (exportConfig.includeShiftList) {
+                    if (exportConfig.includeHeader) lines.push('📅 ROZPIS JEDNOTLIVÝCH SMĚN:');
+                    if (monthlyData.list.length === 0) {
+                        lines.push('• Žádné zapsané směny v tomto měsíci');
+                    } else {
+                        monthlyData.list.forEach(s => {
+                            const d = new Date(s.date);
+                            const dayName = new Intl.DateTimeFormat('cs-CZ', { weekday: 'short' }).format(d);
+                            const dateFormatted = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
+
+                            let details = [];
+                            if (s.type === 'vacation') details.push('Dovolená');
+                            else if (s.type === 'sick') details.push('Nemoc');
+                            else if (exportConfig.includeShiftTimes && s.raw) details.push(s.raw);
+                            else details.push('Směna');
+
+                            if (exportConfig.includeShiftHours) details.push(formatHrs(s.netMinutes));
+
+                            const uniformItem = (s.type === 'work' && monthlyData.isUniformActive) ? (s.netMinutes / 60) * monthlyData.activeUniformRate : 0;
+                            const shiftGross = Math.round(s.gross + uniformItem);
+
+                            if (exportConfig.includeShiftPay) details.push(`${shiftGross.toLocaleString('cs-CZ')} Kč`);
+                            if (exportConfig.includeContractType && s.contractType) details.push(`[${s.contractType}]`);
+
+                            lines.push(`• ${dayName} ${dateFormatted}: ${details.join(' – ')}`);
+                        });
+                    }
+                    if (exportConfig.includeHeader && (exportConfig.includeWorkedHours || exportConfig.includeGross || exportConfig.includeNetTotal)) {
+                        lines.push('═'.repeat(38));
+                    }
+                }
+
+                if (exportConfig.includeWorkedHours) {
+                    lines.push(`⏱ Celkem směn: ${monthlyData.list.length}`);
+                    lines.push(`⏱ Celkem hodin: ${formatHrs(monthlyData.actualHrs * 60)} (práce: ${formatHrs(monthlyData.workedHrsOnly * 60)})`);
+                }
+
+                if (exportConfig.includeGross) {
+                    lines.push(`💰 Hrubá mzda: ${Math.round(monthlyData.gross).toLocaleString('cs-CZ')} Kč`);
+                }
+
+                if (exportConfig.includeBonuses) {
+                    const bonusItems = [];
+                    if (monthlyData.bonuses.night > 0) bonusItems.push(`Noční: +${Math.round(monthlyData.bonuses.night).toLocaleString('cs-CZ')} Kč`);
+                    if (monthlyData.bonuses.weekend > 0) bonusItems.push(`Víkend: +${Math.round(monthlyData.bonuses.weekend).toLocaleString('cs-CZ')} Kč`);
+                    if (monthlyData.bonuses.holiday > 0) bonusItems.push(`Svátek: +${Math.round(monthlyData.bonuses.holiday).toLocaleString('cs-CZ')} Kč`);
+                    if (bonusItems.length > 0) {
+                        lines.push(`🌟 Příplatky: ${bonusItems.join(', ')}`);
+                    }
+                }
+
+                if (exportConfig.includeDeductions) {
+                    const totalDeductions = Math.round(monthlyData.soc + monthlyData.zdra + Math.max(0, monthlyData.rawTax - monthlyData.appliedDiscount));
+                    lines.push(`🛡 Odvody celkem: -${totalDeductions.toLocaleString('cs-CZ')} Kč`);
+                    if (exportFormat !== 'compact') {
+                        lines.push(`   (SZ: -${Math.round(monthlyData.soc).toLocaleString('cs-CZ')} Kč, ZP: -${Math.round(monthlyData.zdra).toLocaleString('cs-CZ')} Kč, Daň: -${Math.round(Math.max(0, monthlyData.rawTax - monthlyData.appliedDiscount)).toLocaleString('cs-CZ')} Kč)`);
+                    }
+                }
+
+                if (exportConfig.includeUniform && monthlyData.isUniformActive && monthlyData.uniformPay > 0) {
+                    lines.push(`👕 Osvobozeno (uniforma): +${Math.round(monthlyData.uniformPay).toLocaleString('cs-CZ')} Kč`);
+                }
+
+                if (exportConfig.includeNetTotal) {
+                    if (exportConfig.includeHeader) lines.push('═'.repeat(38));
+                    if (exportFormat !== 'compact') lines.push(`💵 Čistá mzda: ${Math.round(monthlyData.netWageOnly).toLocaleString('cs-CZ')} Kč`);
+                    lines.push(`💳 CELKEM K VÝPLATĚ: ${Math.round(monthlyData.net).toLocaleString('cs-CZ')} Kč`);
+                }
+
+                return lines.join('\n');
+            }, [currentDate, monthlyData, profileName, exportConfig, exportFormat]);
+
+            const handleCopyExportText = () => {
+                navigator.clipboard.writeText(generatedExportText).then(() => {
+                    showToast('Přehled zkopírován do schránky! 📋');
                 }).catch(() => {
                     showToast('Nepodařilo se zkopírovat.');
                 });
+            };
+
+            const handleShareExportText = async () => {
+                if (navigator.share) {
+                    try {
+                        await navigator.share({
+                            title: `WageTracker přehled za ${new Intl.DateTimeFormat('cs-CZ', { month: 'long', year: 'numeric' }).format(currentDate)}`,
+                            text: generatedExportText
+                        });
+                        showToast('Sdíleno ✓');
+                    } catch (e) {
+                        // User cancelled
+                    }
+                } else {
+                    handleCopyExportText();
+                }
+            };
+
+            const handleDownloadExportFile = () => {
+                const isCsv = exportFormat === 'csv';
+                const filename = `WageTracker-${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}.${isCsv ? 'csv' : 'txt'}`;
+                const blob = new Blob([generatedExportText], { type: isCsv ? 'text/csv;charset=utf-8;' : 'text/plain;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast(`Soubor ${filename} stažen 💾`);
             };
 
             const openEditor = (dateStr) => {
@@ -1133,52 +1406,6 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
                             </button>
                         </div>
                     </header>
-
-                    {/* --- DYNAMIC ISLAND / LIVE ACTIVITY PILL (Only visible when on shift) --- */}
-                    {currentActiveShift && liveShiftStats && (
-                        <div 
-                            onClick={() => setActiveTab('live')}
-                            className={`mb-3.5 p-3 rounded-2xl bg-gradient-to-r ${activeTab === 'live' ? 'from-slate-900 via-slate-800 to-slate-900 border border-emerald-500/50 shadow-lg shadow-emerald-500/10' : 'from-slate-900 to-slate-800 border border-slate-700/60 shadow-md'} text-white cursor-pointer active:scale-[0.98] transition-all flex items-center justify-between group`}
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping absolute"></span>
-                                    <span className="w-2 h-2 rounded-full bg-emerald-400 relative"></span>
-                                </div>
-                                <div>
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1">
-                                            <i className="fa-solid fa-bolt text-[9px] animate-pulse"></i> PRÁVĚ NA SMĚNĚ
-                                        </span>
-                                        <span className="text-[9px] bg-white/10 px-1.5 py-0.2 rounded font-mono font-bold text-slate-300">
-                                            {currentActiveShift.raw}
-                                        </span>
-                                        {currentActiveShift.isDemo && (
-                                            <span className="text-[8px] bg-amber-500/20 text-amber-300 px-1 rounded font-bold">DEMO</span>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="text-xs font-black text-white">
-                                            {liveShiftStats.progressPct.toFixed(1)} %
-                                        </span>
-                                        <span className="text-slate-500 text-[10px]">•</span>
-                                        <span className="text-xs font-bold text-emerald-300 font-mono">
-                                            {Math.round(liveShiftStats.earnedGross).toLocaleString('cs-CZ')} Kč
-                                        </span>
-                                        <span className="text-slate-500 text-[10px]">•</span>
-                                        <span className="text-[11px] font-mono text-slate-300 font-semibold">
-                                            zbývá {liveShiftStats.remainingFormatted}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-1 text-xs text-slate-400 group-hover:text-white group-hover:translate-x-0.5 transition-all">
-                                <span className="text-[10px] font-bold hidden sm:inline">Živě</span>
-                                <i className="fa-solid fa-chevron-right text-xs"></i>
-                            </div>
-                        </div>
-                    )}
 
                     {/* --- CALENDAR TAB --- */}
                     {activeTab === 'calendar' && (
@@ -1377,8 +1604,9 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
 
                     {/* --- SHIFTS LIST TAB --- */}
                     {activeTab === 'list' && (
-                        <div className="space-y-3 animate-fade-in">
-                            <div className="flex justify-between items-center mb-2 px-1">
+                        <div className="space-y-4 animate-fade-in">
+                            {/* Top Title Bar */}
+                            <div className="flex justify-between items-center mb-1 px-1">
                                 <h2 className="font-bold text-xs uppercase text-slate-400 tracking-wider flex items-center gap-2">
                                     Směny za měsíc 
                                     <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full text-[10px] font-black border border-blue-200 dark:border-blue-900/50">
@@ -1394,8 +1622,36 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
                                     </button>
                                 )}
                             </div>
+
+                            {/* View Switch: Pouze směny vs Všechny dny (včetně volna) */}
+                            <div className="bg-slate-200/70 dark:bg-slate-800/70 p-1 rounded-2xl flex items-center gap-1 border border-slate-200/80 dark:border-slate-800/80">
+                                <button
+                                    type="button"
+                                    onClick={() => saveSettings({ ...settings, showOffDaysInList: false })}
+                                    className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 active:scale-95 ${
+                                        !settings.showOffDaysInList
+                                            ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                                            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                    }`}
+                                >
+                                    <i className="fa-solid fa-list-ul text-[10px]"></i>
+                                    <span>Pouze směny ({monthlyData.list.length})</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => saveSettings({ ...settings, showOffDaysInList: true })}
+                                    className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 active:scale-95 ${
+                                        settings.showOffDaysInList
+                                            ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                                            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                    }`}
+                                >
+                                    <i className="fa-regular fa-calendar-days text-[10px]"></i>
+                                    <span>Všechny dny ({daysInMonth})</span>
+                                </button>
+                            </div>
                             
-                            {monthlyData.list.length === 0 ? (
+                            {(!settings.showOffDaysInList && monthlyData.list.length === 0) ? (
                                 <div className="flex flex-col items-center justify-center py-16 px-6 text-center bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200/70 dark:border-slate-800/80 shadow-sm mt-2">
                                     <div className="w-20 h-20 bg-blue-50 dark:bg-slate-800 rounded-3xl flex items-center justify-center mb-5 shadow-inner">
                                         <i className="fa-regular fa-calendar-xmark text-3xl text-blue-400 dark:text-slate-400"></i>
@@ -1410,76 +1666,146 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
                                     </button>
                                 </div>
                             ) : (
-                                monthlyData.list.map(s => {
-                                    const shiftUniformPay = (s.type === 'work' && monthlyData.isUniformActive) ? (s.netMinutes / 60) * monthlyData.activeUniformRate : 0;
-                                    const displayTotal = s.gross + shiftUniformPay;
-
-                                    return (
-                                        <div 
-                                            key={s.date} 
-                                            onClick={() => openEditor(s.date)} 
-                                            className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 flex flex-col gap-2.5 active:scale-[0.98] shadow-sm hover:border-blue-400 dark:hover:border-blue-600 transition-all cursor-pointer"
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center shadow-sm ${
-                                                        s.type === 'vacation' ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600' :
-                                                        s.type === 'sick' ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-600' :
-                                                        'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                                                    }`}>
-                                                        <span className="text-[8px] font-bold uppercase leading-none">{new Intl.DateTimeFormat('cs-CZ', { weekday: 'short' }).format(new Date(s.date))}</span>
-                                                        <span className="text-base font-black mt-0.5">{new Date(s.date).getDate()}</span>
-                                                    </div>
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <p className="font-bold text-sm text-slate-800 dark:text-slate-100">
-                                                                {s.type === 'vacation' ? 'Dovolená' : s.type === 'sick' ? 'Nemocenská' : s.raw}
-                                                            </p>
-                                                            <span className="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-md font-bold">
-                                                                {s.contractType || 'HPP'}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                                                            {formatHrs(s.netMinutes)} • {s.rate} Kč/h 
-                                                            {(s.type === 'work' && monthlyData.isUniformActive) ? ` (+${monthlyData.activeUniformRate} uniforma)` : ''}
-                                                        </p>
-                                                    </div>
+                                <div className="space-y-5">
+                                    {weeklyGroups.map(wg => (
+                                        <div key={`week-${wg.weekNum}-${wg.mon.toISOString()}`} className="space-y-2.5">
+                                            {/* Weekly Header with Subtotals */}
+                                            <div className="flex items-center justify-between px-1.5 pt-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border border-blue-100 dark:border-blue-900/50">
+                                                        Týden {wg.weekNum}
+                                                    </span>
+                                                    <span className="text-[11px] font-bold text-slate-400">
+                                                        {wg.mon.getDate()}. {wg.mon.getMonth() + 1}. – {wg.sun.getDate()}. {wg.sun.getMonth() + 1}.
+                                                    </span>
                                                 </div>
-                                                <div className="text-right">
-                                                    <p className="text-sm font-black text-slate-900 dark:text-white">
-                                                        {Math.round(displayTotal).toLocaleString('cs-CZ')} Kč
-                                                    </p>
-                                                    <span className="text-[9px] text-slate-400 font-semibold">hrubá</span>
+                                                <div className="flex items-center gap-1.5 text-[11px] font-black text-slate-700 dark:text-slate-300 bg-slate-100/80 dark:bg-slate-800/80 px-2.5 py-0.5 rounded-xl border border-slate-200/60 dark:border-slate-800/80">
+                                                    <span className="text-blue-600 dark:text-blue-400 font-extrabold">{formatHrs(wg.totalMinutes)}</span>
+                                                    <span className="text-slate-300 dark:text-slate-600">•</span>
+                                                    <span className="text-slate-900 dark:text-white font-black">{Math.round(wg.totalGross).toLocaleString('cs-CZ')} Kč</span>
                                                 </div>
                                             </div>
-                                            
-                                            {(s.type === 'work' && (s.nBonus > 0 || s.wBonus > 0 || s.hBonus > 0 || shiftUniformPay > 0)) && (
-                                                <div className="flex flex-wrap gap-1.5 border-t border-slate-100 dark:border-slate-800/60 pt-2">
-                                                    {s.nBonus > 0 && (
-                                                        <div className="flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-lg text-[9px] font-bold border border-indigo-100 dark:border-indigo-900/40">
-                                                            <i className="fa-solid fa-bolt text-[8px]"></i> +{Math.round(s.nBonus)} Kč noc
+
+                                            {/* Days/Shifts in Week */}
+                                            <div className="space-y-2.5">
+                                                {wg.days.map(item => {
+                                                    if (item.isOffDay) {
+                                                        const dObj = new Date(item.date + 'T00:00:00');
+                                                        const dayName = new Intl.DateTimeFormat('cs-CZ', { weekday: 'short' }).format(dObj);
+                                                        const dayNum = dObj.getDate();
+                                                        const holKey = `${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                                                        const hol = holidays[holKey];
+                                                        const isWk = [0, 6].includes(dObj.getDay());
+
+                                                        return (
+                                                            <div 
+                                                                key={item.date} 
+                                                                onClick={() => openEditor(item.date)} 
+                                                                className="group py-2.5 px-3.5 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/30 hover:bg-blue-50/40 dark:hover:bg-blue-950/20 hover:border-blue-300 dark:hover:border-blue-800/60 active:scale-[0.99] transition-all cursor-pointer flex items-center justify-between"
+                                                            >
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className={`w-8 h-8 rounded-xl flex flex-col items-center justify-center transition-colors ${
+                                                                        isWk 
+                                                                            ? 'bg-amber-500/10 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400' 
+                                                                            : 'bg-slate-100 dark:bg-slate-800/50 text-slate-400 dark:text-slate-500'
+                                                                    } group-hover:text-blue-600 dark:group-hover:text-blue-400`}>
+                                                                        <span className="text-[7.5px] font-bold uppercase leading-none">{dayName}</span>
+                                                                        <span className="text-xs font-black mt-0.5">{dayNum}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors">
+                                                                            Volno
+                                                                        </span>
+                                                                        {hol && (
+                                                                            <span className="text-[9px] px-2 py-0.5 bg-rose-50 dark:bg-rose-950/40 text-rose-500 rounded-md font-bold border border-rose-100 dark:border-rose-900/40 flex items-center gap-1">
+                                                                                <i className="fa-solid fa-champagne-glasses text-[8px]"></i> {hol}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex items-center gap-1 text-[10px] font-bold text-slate-300 dark:text-slate-600 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                                                    <span className="hidden sm:inline">Přidat směnu</span>
+                                                                    <i className="fa-solid fa-plus text-xs"></i>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    const s = item;
+                                                    const shiftUniformPay = (s.type === 'work' && monthlyData.isUniformActive) ? (s.netMinutes / 60) * monthlyData.activeUniformRate : 0;
+                                                    const displayTotal = s.gross + shiftUniformPay;
+
+                                                    return (
+                                                        <div 
+                                                            key={s.date} 
+                                                            onClick={() => openEditor(s.date)} 
+                                                            className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 flex flex-col gap-2.5 active:scale-[0.98] shadow-sm hover:border-blue-400 dark:hover:border-blue-600 transition-all cursor-pointer"
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center shadow-sm ${
+                                                                        s.type === 'vacation' ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600' :
+                                                                        s.type === 'sick' ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-600' :
+                                                                        'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                                                                    }`}>
+                                                                        <span className="text-[8px] font-bold uppercase leading-none">{new Intl.DateTimeFormat('cs-CZ', { weekday: 'short' }).format(new Date(s.date))}</span>
+                                                                        <span className="text-base font-black mt-0.5">{new Date(s.date).getDate()}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <p className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                                                                                {s.type === 'vacation' ? 'Dovolená' : s.type === 'sick' ? 'Nemocenská' : s.raw}
+                                                                            </p>
+                                                                            <span className="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-md font-bold">
+                                                                                {s.contractType || 'HPP'}
+                                                                            </span>
+                                                                        </div>
+                                                                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                                                                            {formatHrs(s.netMinutes)} • {s.rate} Kč/h 
+                                                                            {(s.type === 'work' && monthlyData.isUniformActive) ? ` (+${monthlyData.activeUniformRate} uniforma)` : ''}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="text-sm font-black text-slate-900 dark:text-white">
+                                                                        {Math.round(displayTotal).toLocaleString('cs-CZ')} Kč
+                                                                    </p>
+                                                                    <span className="text-[9px] text-slate-400 font-semibold">hrubá</span>
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            {(s.type === 'work' && (s.nBonus > 0 || s.wBonus > 0 || s.hBonus > 0 || shiftUniformPay > 0)) && (
+                                                                <div className="flex flex-wrap gap-1.5 border-t border-slate-100 dark:border-slate-800/60 pt-2">
+                                                                    {s.nBonus > 0 && (
+                                                                        <div className="flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-lg text-[9px] font-bold border border-indigo-100 dark:border-indigo-900/40">
+                                                                            <i className="fa-solid fa-bolt text-[8px]"></i> +{Math.round(s.nBonus)} Kč noc
+                                                                        </div>
+                                                                    )}
+                                                                    {s.wBonus > 0 && (
+                                                                        <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-lg text-[9px] font-bold border border-amber-100 dark:border-amber-900/40">
+                                                                            <i className="fa-solid fa-star text-[8px]"></i> +{Math.round(s.wBonus)} Kč víkend
+                                                                        </div>
+                                                                    )}
+                                                                    {s.hBonus > 0 && (
+                                                                        <div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 px-2 py-0.5 rounded-lg text-[9px] font-bold border border-rose-100 dark:border-rose-900/40">
+                                                                            <i className="fa-solid fa-champagne-glasses text-[8px]"></i> +{Math.round(s.hBonus)} Kč svátek
+                                                                        </div>
+                                                                    )}
+                                                                    {shiftUniformPay > 0 && (
+                                                                        <div className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-lg text-[9px] font-bold border border-emerald-100 dark:border-emerald-900/40">
+                                                                            <i className="fa-solid fa-shirt text-[8px]"></i> +{Math.round(shiftUniformPay)} Kč uniforma
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                    {s.wBonus > 0 && (
-                                                        <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-lg text-[9px] font-bold border border-amber-100 dark:border-amber-900/40">
-                                                            <i className="fa-solid fa-star text-[8px]"></i> +{Math.round(s.wBonus)} Kč víkend
-                                                        </div>
-                                                    )}
-                                                    {s.hBonus > 0 && (
-                                                        <div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 px-2 py-0.5 rounded-lg text-[9px] font-bold border border-rose-100 dark:border-rose-900/40">
-                                                            <i className="fa-solid fa-champagne-glasses text-[8px]"></i> +{Math.round(s.hBonus)} Kč svátek
-                                                        </div>
-                                                    )}
-                                                    {shiftUniformPay > 0 && (
-                                                        <div className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-lg text-[9px] font-bold border border-emerald-100 dark:border-emerald-900/40">
-                                                            <i className="fa-solid fa-shirt text-[8px]"></i> +{Math.round(shiftUniformPay)} Kč uniforma
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
-                                    );
-                                })
+                                    ))}
+                                </div>
                             )}
                         </div>
                     )}
@@ -1530,13 +1856,180 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
                                     </div>
                                 </div>
 
-                                {/* Copy Summary Action Button */}
+                                {/* Export Action Button */}
                                 <button 
-                                    onClick={handleCopySummary}
-                                    className="relative z-10 w-full mt-3.5 py-3 bg-white/10 hover:bg-white/15 active:scale-[0.98] rounded-2xl text-xs font-bold text-white transition-all flex items-center justify-center gap-2 border border-white/10 shadow-sm"
+                                    onClick={() => setShowExportModal(true)}
+                                    className="relative z-10 w-full mt-3.5 py-3 bg-white/10 hover:bg-white/15 active:scale-[0.98] rounded-2xl text-xs font-bold text-white transition-all flex items-center justify-center gap-2 border border-white/10 shadow-sm group"
                                 >
-                                    <i className="fa-regular fa-copy text-sm"></i> Zkopírovat podrobný rozpis směn
+                                    <i className="fa-solid fa-arrow-up-from-bracket text-sm text-blue-300 group-hover:-translate-y-0.5 transition-transform"></i>
+                                    Exportovat přehled a rozpis směn
                                 </button>
+                            </div>
+
+                            {/* --- VODOPÁD VÝPLATY (CASH FLOW BREAKDOWN) --- */}
+                            <div>
+                                <div className="flex justify-between items-center px-3 mb-2">
+                                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                        <i className="fa-solid fa-money-bill-transfer text-blue-500"></i> Vodopád výplaty
+                                    </h3>
+                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
+                                        {monthlyData.gross > 0 ? `${((monthlyData.net / monthlyData.gross) * 100).toFixed(0)} % hrubé mzdy` : '0 %'}
+                                    </span>
+                                </div>
+
+                                <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200/80 dark:border-slate-800/80 p-5 shadow-sm space-y-4">
+                                    {/* Visual Proportional Bar */}
+                                    <div className="space-y-1.5 pb-3 border-b border-slate-100 dark:border-slate-800/60">
+                                        <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex shadow-inner">
+                                            {monthlyData.gross > 0 ? (
+                                                <>
+                                                    <div 
+                                                        className="bg-blue-500 transition-all duration-500" 
+                                                        style={{ width: `${Math.min(100, Math.max(0, (monthlyData.netWageOnly / monthlyData.gross) * 100))}%` }}
+                                                    />
+                                                    <div 
+                                                        className="bg-rose-500 transition-all duration-500" 
+                                                        style={{ width: `${Math.min(100, Math.max(0, ((monthlyData.soc + monthlyData.zdra + Math.max(0, monthlyData.rawTax - monthlyData.appliedDiscount)) / monthlyData.gross) * 100))}%` }}
+                                                    />
+                                                    {monthlyData.uniformPay > 0 && (
+                                                        <div 
+                                                            className="bg-emerald-400 transition-all duration-500" 
+                                                            style={{ width: `${Math.min(100, Math.max(0, (monthlyData.uniformPay / monthlyData.gross) * 100))}%` }}
+                                                        />
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <div className="w-full bg-slate-200 dark:bg-slate-800"></div>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center justify-between text-[9px] text-slate-400 font-bold px-0.5">
+                                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Čistá mzda</span>
+                                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500"></span> Odvody a daň</span>
+                                            {monthlyData.uniformPay > 0 && (
+                                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400"></span> Uniforma</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Step by step Flow Pipeline */}
+                                    <div className="relative pl-6 space-y-3.5 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100 dark:before:bg-slate-800">
+                                        {/* 1. Hrubá mzda */}
+                                        <div className="relative flex items-center justify-between">
+                                            <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-blue-50 dark:bg-blue-950/60 border-2 border-blue-500 flex items-center justify-center">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Hrubá mzda celkem</p>
+                                                <p className="text-[10px] text-slate-400">Základní tarif + příplatky</p>
+                                            </div>
+                                            <span className="text-xs font-black text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2.5 py-1 rounded-xl border border-blue-100 dark:border-blue-900/40">
+                                                +{Math.round(monthlyData.gross).toLocaleString('cs-CZ')} Kč
+                                            </span>
+                                        </div>
+
+                                        {/* 2. Sociální pojištění */}
+                                        <div className="relative flex items-center justify-between">
+                                            <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-rose-50 dark:bg-rose-950/60 border-2 border-rose-500 flex items-center justify-center">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Sociální pojištění</p>
+                                                <p className="text-[10px] text-slate-400">Zákonný odvod 7,1 %</p>
+                                            </div>
+                                            <span className="text-xs font-black text-rose-500 bg-rose-50 dark:bg-rose-950/40 px-2.5 py-1 rounded-xl border border-rose-100 dark:border-rose-900/40">
+                                                -{Math.round(monthlyData.soc).toLocaleString('cs-CZ')} Kč
+                                            </span>
+                                        </div>
+
+                                        {/* 3. Zdravotní pojištění */}
+                                        <div className="relative flex items-center justify-between">
+                                            <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-rose-50 dark:bg-rose-950/60 border-2 border-rose-500 flex items-center justify-center">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Zdravotní pojištění</p>
+                                                <p className="text-[10px] text-slate-400">Zákonný odvod 4,5 %</p>
+                                            </div>
+                                            <span className="text-xs font-black text-rose-500 bg-rose-50 dark:bg-rose-950/40 px-2.5 py-1 rounded-xl border border-rose-100 dark:border-rose-900/40">
+                                                -{Math.round(monthlyData.zdra).toLocaleString('cs-CZ')} Kč
+                                            </span>
+                                        </div>
+
+                                        {/* 4. Záloha na daň */}
+                                        <div className="relative flex items-center justify-between">
+                                            <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-rose-50 dark:bg-rose-950/60 border-2 border-rose-500 flex items-center justify-center">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Záloha na daň z příjmů</p>
+                                                <p className="text-[10px] text-slate-400">15 % ze základu</p>
+                                            </div>
+                                            <span className="text-xs font-black text-rose-500 bg-rose-50 dark:bg-rose-950/40 px-2.5 py-1 rounded-xl border border-rose-100 dark:border-rose-900/40">
+                                                -{Math.round(monthlyData.rawTax).toLocaleString('cs-CZ')} Kč
+                                            </span>
+                                        </div>
+
+                                        {/* 5. Daňová sleva na poplatníka */}
+                                        {monthlyData.appliedDiscount > 0 && (
+                                            <div className="relative flex items-center justify-between">
+                                                <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border-2 border-emerald-500 flex items-center justify-center">
+                                                    <i className="fa-solid fa-plus text-[8px] text-emerald-500 font-black"></i>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Sleva na poplatníka</p>
+                                                    <p className="text-[10px] text-slate-400">Daňové zvýhodnění (až 2 570 Kč)</p>
+                                                </div>
+                                                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-xl border border-emerald-100 dark:border-emerald-900/40">
+                                                    +{Math.round(monthlyData.appliedDiscount).toLocaleString('cs-CZ')} Kč
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {/* Subtotal: Čistá mzda po daních */}
+                                        <div className="relative flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800/60">
+                                            <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-slate-400 flex items-center justify-center">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-slate-500"></div>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-extrabold text-slate-900 dark:text-white">Čistá mzda (zdaněná)</p>
+                                                <p className="text-[10px] text-slate-400">Po odečtení odvodů a daní</p>
+                                            </div>
+                                            <span className="text-xs font-black text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-xl">
+                                                ={Math.round(monthlyData.netWageOnly).toLocaleString('cs-CZ')} Kč
+                                            </span>
+                                        </div>
+
+                                        {/* 6. Uniforma (pokud je) */}
+                                        {monthlyData.isUniformActive && monthlyData.uniformPay > 0 && (
+                                            <div className="relative flex items-center justify-between">
+                                                <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border-2 border-emerald-500 flex items-center justify-center">
+                                                    <i className="fa-solid fa-shirt text-[8px] text-emerald-500 font-black"></i>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Příspěvek na uniformu</p>
+                                                    <p className="text-[10px] text-slate-400">Čistá ruka (nezdanitelné)</p>
+                                                </div>
+                                                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-xl border border-emerald-100 dark:border-emerald-900/40">
+                                                    +{Math.round(monthlyData.uniformPay).toLocaleString('cs-CZ')} Kč
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {/* Final: K výplatě na účet */}
+                                        <div className="relative flex items-center justify-between pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                                            <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-emerald-500 border-2 border-emerald-400 flex items-center justify-center shadow-xs">
+                                                <i className="fa-solid fa-check text-[9px] text-white"></i>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-black text-slate-900 dark:text-white">Celkem k výplatě na účet</p>
+                                                <p className="text-[10px] text-slate-400 font-medium">Konečná čistá částka</p>
+                                            </div>
+                                            <span className="text-sm font-black text-white bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-1 rounded-xl shadow-md shadow-emerald-500/20">
+                                                {Math.round(monthlyData.net).toLocaleString('cs-CZ')} Kč
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             
                             {/* --- SECTION 1: HRUBÁ MZDA A PŘÍPLATKY --- */}
@@ -1851,30 +2344,37 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
 
                             {currentActiveShift && liveShiftStats ? (
                                 <>
-                                    {/* 1. HERO CIRCULAR GAUGE & COUNTDOWN CARD */}
-                                    <div className="bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white rounded-[2.5rem] p-6 shadow-xl border border-slate-800 relative overflow-hidden flex flex-col items-center text-center">
-                                        {/* Ambient Glow */}
-                                        <div className="absolute -top-16 -left-16 w-48 h-48 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"></div>
-                                        <div className="absolute -bottom-16 -right-16 w-48 h-48 bg-blue-500/15 rounded-full blur-3xl pointer-events-none"></div>
+                                    {/* 1. UNIFIED HERO WIDGET (Native WageTracker Theme) */}
+                                    <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-6 shadow-sm border border-slate-200/80 dark:border-slate-800/80 relative overflow-hidden flex flex-col items-center text-center">
+                                        {/* Ambient Subtle Glow */}
+                                        <div className="absolute -top-24 -left-24 w-52 h-52 bg-emerald-500/10 dark:bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"></div>
+                                        <div className="absolute -bottom-24 -right-24 w-52 h-52 bg-cyan-500/10 dark:bg-cyan-500/15 rounded-full blur-3xl pointer-events-none"></div>
 
-                                        {/* Top status bar inside card */}
-                                        <div className="w-full flex justify-between items-center mb-4 z-10">
+                                        {/* Top Status Bar: Live pulse + Shift Tag + Edit Shift Icon Button */}
+                                        <div className="w-full flex justify-between items-center mb-3 z-10">
                                             <div className="flex items-center gap-2">
                                                 <span className="relative flex h-2.5 w-2.5">
                                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                                                 </span>
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Živá Směna</span>
-                                            </div>
-                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Živá Směna</span>
                                                 {currentActiveShift.isDemo && (
-                                                    <span className="text-[9px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+                                                    <span className="text-[8px] bg-amber-500/15 text-amber-600 dark:text-amber-400 font-black px-1.5 py-0.5 rounded-full border border-amber-500/30">
                                                         SIMULACE
                                                     </span>
                                                 )}
-                                                <span className="text-[10px] font-mono font-bold bg-white/10 px-2.5 py-0.5 rounded-full text-slate-300 border border-white/5">
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[11px] font-mono font-bold bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60">
                                                     {currentActiveShift.raw} • {currentActiveShift.rate} Kč/h
                                                 </span>
+                                                <button 
+                                                    onClick={() => openEditor(currentActiveShift.dateStr)}
+                                                    className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-90 transition-all flex items-center justify-center text-slate-500 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
+                                                    title="Upravit směnu"
+                                                >
+                                                    <i className="fa-solid fa-pen-to-square text-xs"></i>
+                                                </button>
                                             </div>
                                         </div>
 
@@ -1886,7 +2386,7 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
                                                     cx="100"
                                                     cy="100"
                                                     r="82"
-                                                    className="text-slate-800/80 stroke-current"
+                                                    className="stroke-slate-100 dark:stroke-slate-800"
                                                     strokeWidth="14"
                                                     fill="transparent"
                                                 />
@@ -1895,18 +2395,18 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
                                                     cx="100"
                                                     cy="100"
                                                     r="82"
-                                                    stroke="url(#liveGaugeGradient)"
+                                                    stroke="url(#heroNeonGradient)"
                                                     strokeWidth="14"
                                                     strokeLinecap="round"
                                                     fill="transparent"
                                                     strokeDasharray={2 * Math.PI * 82}
                                                     strokeDashoffset={2 * Math.PI * 82 * (1 - liveShiftStats.progressPct / 100)}
-                                                    className="transition-all duration-1000 ease-linear drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]"
+                                                    className="transition-all duration-200 ease-linear drop-shadow-[0_0_12px_rgba(16,185,129,0.35)]"
                                                 />
                                                 <defs>
-                                                    <linearGradient id="liveGaugeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                    <linearGradient id="heroNeonGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                                                         <stop offset="0%" stopColor="#10b981" />
-                                                        <stop offset="50%" stopColor="#06b6d4" />
+                                                        <stop offset="60%" stopColor="#06b6d4" />
                                                         <stop offset="100%" stopColor="#3b82f6" />
                                                     </linearGradient>
                                                 </defs>
@@ -1914,93 +2414,129 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
 
                                             {/* Inside Ring Content */}
                                             <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
                                                     Hotovo
                                                 </span>
-                                                <span className="text-4xl font-black tracking-tight text-white my-0.5 font-mono">
-                                                    {liveShiftStats.progressPct.toFixed(1)} <span className="text-xl text-emerald-400 font-sans">%</span>
+                                                <span className="text-4xl font-black tracking-tight text-slate-900 dark:text-white my-0.5 font-mono">
+                                                    {liveShiftStats.progressPct.toFixed(2)} <span className="text-xl text-emerald-500 font-sans">%</span>
                                                 </span>
-                                                <span className="text-[10px] font-bold text-slate-400">
-                                                    zbývá <strong className="font-mono text-slate-200">{liveShiftStats.remainingFormatted}</strong>
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        {/* Bottom strip in Hero card: Start vs End times */}
-                                        <div className="w-full grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-800/80 z-10 text-left">
-                                            <div className="bg-slate-800/40 p-2.5 rounded-2xl border border-slate-800/60">
-                                                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Odpracováno</span>
-                                                <span className="text-sm font-mono font-black text-white">{liveShiftStats.elapsedFormatted}</span>
-                                            </div>
-                                            <div className="bg-slate-800/40 p-2.5 rounded-2xl border border-slate-800/60 text-right">
-                                                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Konec směny</span>
-                                                <span className="text-sm font-mono font-black text-emerald-400">
-                                                    {String(currentActiveShift.endTime.getHours()).padStart(2, '0')}:{String(currentActiveShift.endTime.getMinutes()).padStart(2, '0')}
+                                                <span className="text-[11px] font-medium text-slate-400 dark:text-slate-400">
+                                                    zbývá <strong className="font-mono text-slate-700 dark:text-slate-200 font-bold">{liveShiftStats.remainingFormatted}</strong>
                                                 </span>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    {/* 2. LIVE EARNINGS TICKER (Tachometr výplaty) */}
-                                    <div className="bg-white dark:bg-slate-900 rounded-[2.2rem] p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-sm relative overflow-hidden">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div>
-                                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                                                    <i className="fa-solid fa-coins text-amber-500"></i> Právě vyděláno k této sekundě
+                                        {/* Dominant Live Earnings Ticker (Přímo integrovaný pod kruhem) */}
+                                        <div className="w-full pt-1 pb-1 z-10">
+                                            <div className="flex items-center justify-center gap-2 mb-1">
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                                                    <i className="fa-solid fa-coins text-amber-500"></i> Právě vyděláno v reálném čase
                                                 </span>
-                                                <div className="flex items-baseline gap-2 mt-1">
-                                                    <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tight font-mono">
-                                                        {liveShiftStats.earnedGross.toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                    </span>
-                                                    <span className="text-base font-black text-emerald-600 dark:text-emerald-400">Kč</span>
-                                                </div>
-                                            </div>
-
-                                            {/* Live Speed Badge */}
-                                            <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 px-2.5 py-1.5 rounded-xl text-right">
-                                                <span className="text-[9px] font-bold text-slate-400 block leading-tight">Rychlost</span>
-                                                <span className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400 leading-tight">
+                                                <span className="text-[10px] font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-full">
                                                     +{liveShiftStats.moneyPerSec.toFixed(2)} Kč/s
                                                 </span>
                                             </div>
+                                            <div className="text-4xl font-black text-slate-900 dark:text-white tracking-tight font-mono my-1">
+                                                {liveShiftStats.earnedGross.toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-2xl text-emerald-600 dark:text-emerald-400 font-sans font-bold">Kč</span>
+                                            </div>
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 text-xs">
-                                            <div>
-                                                <span className="text-[10px] font-semibold text-slate-400 block">Čistá ruka (odhad v kapse)</span>
-                                                <span className="font-extrabold text-slate-700 dark:text-slate-200">
+                                        {/* 4 Compact Stat Tiles (2x2 Grid uvnitř Hero widgetu) */}
+                                        <div className="w-full grid grid-cols-2 gap-2.5 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 z-10 text-left">
+                                            {/* Odpracováno */}
+                                            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800/70">
+                                                <div className="flex items-center gap-1.5 mb-1 text-slate-400">
+                                                    <i className="fa-solid fa-clock text-[10px] text-blue-500"></i>
+                                                    <span className="text-[9px] font-bold uppercase tracking-wider">Odpracováno</span>
+                                                </div>
+                                                <span className="text-sm font-mono font-black text-slate-900 dark:text-white">{liveShiftStats.elapsedFormatted}</span>
+                                            </div>
+
+                                            {/* Konec směny */}
+                                            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800/70 text-right">
+                                                <div className="flex items-center justify-end gap-1.5 mb-1 text-slate-400">
+                                                    <span className="text-[9px] font-bold uppercase tracking-wider">Konec směny</span>
+                                                    <i className="fa-solid fa-flag-checkered text-[10px] text-emerald-500"></i>
+                                                </div>
+                                                <span className="text-sm font-mono font-black text-emerald-600 dark:text-emerald-400">
+                                                    {String(currentActiveShift.endTime.getHours()).padStart(2, '0')}:{String(currentActiveShift.endTime.getMinutes()).padStart(2, '0')}
+                                                </span>
+                                            </div>
+
+                                            {/* Čistá ruka (odhad) */}
+                                            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800/70">
+                                                <div className="flex items-center gap-1.5 mb-1 text-slate-400">
+                                                    <i className="fa-solid fa-wallet text-[10px] text-amber-500"></i>
+                                                    <span className="text-[9px] font-bold uppercase tracking-wider">Čistá ruka (v kapse)</span>
+                                                </div>
+                                                <span className="text-sm font-mono font-black text-slate-700 dark:text-slate-200">
                                                     ≈ {Math.round(liveShiftStats.earnedNet).toLocaleString('cs-CZ')} Kč
                                                 </span>
                                             </div>
-                                            <div className="text-right">
-                                                <span className="text-[10px] font-semibold text-slate-400 block">Na konci směny bude</span>
-                                                <span className="font-black text-emerald-600 dark:text-emerald-400">
+
+                                            {/* Na konci směny bude */}
+                                            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800/70 text-right">
+                                                <div className="flex items-center justify-end gap-1.5 mb-1 text-slate-400">
+                                                    <span className="text-[9px] font-bold uppercase tracking-wider">Na konci směny</span>
+                                                    <i className="fa-solid fa-sack-dollar text-[10px] text-cyan-500"></i>
+                                                </div>
+                                                <span className="text-sm font-mono font-black text-emerald-600 dark:text-emerald-400">
                                                     ≈ {Math.round(liveShiftStats.totalExpectedGross).toLocaleString('cs-CZ')} Kč
                                                 </span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* 3. DYNAMIC MOTIVATIONAL VIBE CARD */}
-                                    <div className={`p-4 rounded-[2rem] bg-gradient-to-r ${liveShiftStats.motivationalQuote.color} text-white shadow-md flex items-center gap-3.5`}>
-                                        <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-xl shrink-0">
+                                    {/* 2. DYNAMIC MOTIVATIONAL BANNER (Native Card Theme) */}
+                                    <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 p-4 shadow-sm flex items-center gap-3.5 relative overflow-hidden">
+                                        <div className="w-11 h-11 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-lg shrink-0 border border-emerald-100 dark:border-emerald-900/50">
                                             <i className={`fa-solid ${liveShiftStats.motivationalQuote.icon}`}></i>
                                         </div>
-                                        <div>
-                                            <h4 className="font-black text-sm tracking-tight">{liveShiftStats.motivationalQuote.title}</h4>
-                                            <p className="text-xs text-white/90 font-medium leading-snug mt-0.5">{liveShiftStats.motivationalQuote.text}</p>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <h4 className="font-bold text-xs tracking-tight text-slate-800 dark:text-white truncate">{liveShiftStats.motivationalQuote.title}</h4>
+                                                <span className="text-[9px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/60">
+                                                    {liveShiftStats.progressPct.toFixed(1)} %
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-snug mt-0.5">{liveShiftStats.motivationalQuote.text}</p>
                                         </div>
                                     </div>
 
-                                    {/* 4. GAMIFIED REALITY CHECK CARDS ("Co už sis dneska vydělal?") */}
-                                    <div>
-                                        <div className="flex justify-between items-center px-2 mb-2">
-                                            <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Co už sis dnes vydělal?</h3>
-                                            <span className="text-[10px] font-bold text-slate-400">reálné ekvivalenty</span>
+                                    {/* 3. GAMIFIED REALITY CHECK CARDS (Apple Health 2x2 Grid) */}
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center px-2">
+                                            <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Co už sis dnes vydělal?</h3>
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Apple Health Styl</span>
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-2.5">
-                                            {/* 🍺 Beers */}
+                                            {/* 🐶 Pet Shopka (LPS) - 150 Kč */}
+                                            <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-col justify-between">
+                                                <div className="flex justify-between items-start">
+                                                    <span className="text-2xl">🐶</span>
+                                                    <span className="text-lg font-black text-pink-500 font-mono">
+                                                        {liveShiftStats.petShopsEarned.toFixed(1)}×
+                                                    </span>
+                                                </div>
+                                                <div className="mt-2">
+                                                    <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-100">
+                                                        <span>Pet Shopka</span>
+                                                        <span className="text-[10px] text-pink-500 font-mono">150 Kč</span>
+                                                    </div>
+                                                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden my-1.5">
+                                                        <div 
+                                                            className="bg-gradient-to-r from-pink-500 to-rose-400 h-full rounded-full transition-all duration-200 ease-linear"
+                                                            style={{ width: `${Math.min(100, (liveShiftStats.petShopsEarned % 1) * 100)}%` }}
+                                                        ></div>
+                                                    </div>
+                                                    <span className="text-[9px] text-slate-400 font-semibold font-mono block">
+                                                        další za {Math.floor(liveShiftStats.secToNextPetShop / 60)}m {liveShiftStats.secToNextPetShop % 60}s
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* 🍺 Orosené pivo - 55 Kč */}
                                             <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-col justify-between">
                                                 <div className="flex justify-between items-start">
                                                     <span className="text-2xl">🍺</span>
@@ -2009,43 +2545,24 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
                                                     </span>
                                                 </div>
                                                 <div className="mt-2">
-                                                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block">Orosené pivo</span>
+                                                    <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-100">
+                                                        <span>Orosené pivo</span>
+                                                        <span className="text-[10px] text-amber-500 font-mono">55 Kč</span>
+                                                    </div>
                                                     <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden my-1.5">
                                                         <div 
-                                                            className="bg-amber-500 h-full rounded-full transition-all duration-500"
+                                                            className="bg-amber-500 h-full rounded-full transition-all duration-200 ease-linear"
                                                             style={{ width: `${Math.min(100, (liveShiftStats.beersEarned % 1) * 100)}%` }}
                                                         ></div>
                                                     </div>
-                                                    <span className="text-[9px] text-slate-400 font-semibold font-mono">
+                                                    <span className="text-[9px] text-slate-400 font-semibold font-mono block">
                                                         další za {Math.floor(liveShiftStats.secToNextBeer / 60)}m {liveShiftStats.secToNextBeer % 60}s
                                                     </span>
                                                 </div>
                                             </div>
 
-                                            {/* ☕️ Coffees */}
+                                            {/* 🍕 Oběd / Pizza - 185 Kč */}
                                             <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-col justify-between">
-                                                <div className="flex justify-between items-start">
-                                                    <span className="text-2xl">☕️</span>
-                                                    <span className="text-lg font-black text-amber-700 dark:text-amber-400 font-mono">
-                                                        {liveShiftStats.coffeesEarned.toFixed(1)}×
-                                                    </span>
-                                                </div>
-                                                <div className="mt-2">
-                                                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block">Výběrová káva</span>
-                                                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden my-1.5">
-                                                        <div 
-                                                            className="bg-amber-700 dark:bg-amber-500 h-full rounded-full transition-all duration-500"
-                                                            style={{ width: `${Math.min(100, (liveShiftStats.coffeesEarned % 1) * 100)}%` }}
-                                                        ></div>
-                                                    </div>
-                                                    <span className="text-[9px] text-slate-400 font-semibold font-mono">
-                                                        další za {Math.floor(liveShiftStats.secToNextCoffee / 60)}m {liveShiftStats.secToNextCoffee % 60}s
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* 🍕 Pizza / Lunch */}
-                                            <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
                                                 <div className="flex justify-between items-start">
                                                     <span className="text-2xl">🍕</span>
                                                     <span className="text-lg font-black text-rose-500 font-mono">
@@ -2053,32 +2570,50 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
                                                     </span>
                                                 </div>
                                                 <div className="mt-2">
-                                                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block">Oběd / Pizza</span>
-                                                    <span className="text-[10px] text-slate-400 font-semibold mt-1 block">
-                                                        při 185 Kč / menu
+                                                    <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-100">
+                                                        <span>Oběd / Pizza</span>
+                                                        <span className="text-[10px] text-rose-500 font-mono">185 Kč</span>
+                                                    </div>
+                                                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden my-1.5">
+                                                        <div 
+                                                            className="bg-rose-500 h-full rounded-full transition-all duration-200 ease-linear"
+                                                            style={{ width: `${Math.min(100, (liveShiftStats.lunchesEarned % 1) * 100)}%` }}
+                                                        ></div>
+                                                    </div>
+                                                    <span className="text-[9px] text-slate-400 font-semibold font-mono block">
+                                                        další za {Math.floor(liveShiftStats.secToNextLunch / 60)}m {liveShiftStats.secToNextLunch % 60}s
                                                     </span>
                                                 </div>
                                             </div>
 
-                                            {/* ⛽️ Fuel */}
-                                            <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
+                                            {/* ⛽️ Palivo do auta - 38 Kč / litr */}
+                                            <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-col justify-between">
                                                 <div className="flex justify-between items-start">
                                                     <span className="text-2xl">⛽️</span>
-                                                    <span className="text-lg font-black text-blue-500 font-mono">
+                                                    <span className="text-lg font-black text-cyan-500 font-mono">
                                                         {liveShiftStats.fuelLiters.toFixed(1)} l
                                                     </span>
                                                 </div>
                                                 <div className="mt-2">
-                                                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block">Palivo do auta</span>
-                                                    <span className="text-[10px] text-slate-400 font-semibold mt-1 block">
-                                                        při 38 Kč / litr
+                                                    <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-100">
+                                                        <span>Palivo do auta</span>
+                                                        <span className="text-[10px] text-cyan-500 font-mono">38 Kč/l</span>
+                                                    </div>
+                                                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden my-1.5">
+                                                        <div 
+                                                            className="bg-cyan-500 h-full rounded-full transition-all duration-200 ease-linear"
+                                                            style={{ width: `${Math.min(100, (liveShiftStats.fuelLiters % 1) * 100)}%` }}
+                                                        ></div>
+                                                    </div>
+                                                    <span className="text-[9px] text-slate-400 font-semibold font-mono block">
+                                                        další litr za {Math.floor(liveShiftStats.secToNextFuel / 60)}m {liveShiftStats.secToNextFuel % 60}s
                                                     </span>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* 5. AKTIVNÍ PŘÍPLATKY & BONUSY */}
+                                    {/* 4. AKTIVNÍ PŘÍPLATKY & BONUSY */}
                                     <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-4 border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-2">
                                         <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">
                                             Aktivní příplatky k této minutě
@@ -2112,24 +2647,26 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
                                         </div>
                                     </div>
 
-                                    {/* 6. INTERACTIVE CELEBRATION & EDIT BUTTONS */}
-                                    <div className="grid grid-cols-2 gap-2 pt-1 pb-6">
-                                        <button 
-                                            onClick={() => {
-                                                setShowCelebration(true);
-                                                if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
-                                                setTimeout(() => setShowCelebration(false), 2500);
-                                            }}
-                                            className="py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-xs shadow-md shadow-orange-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
-                                        >
-                                            <i className="fa-solid fa-party-horn"></i> Oslavit milník 🎉
-                                        </button>
+                                    {/* 5. BOTTOM ACTIONS (Seriózní Apple styl) */}
+                                    <div className="pt-1 pb-6 space-y-2">
                                         <button 
                                             onClick={() => openEditor(currentActiveShift.dateStr)}
-                                            className="py-3 px-4 rounded-2xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-200/80 dark:border-slate-800/80 shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2"
+                                            className="w-full py-3.5 px-4 rounded-2xl bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold text-xs border border-slate-200/80 dark:border-slate-800/80 shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 hover:border-slate-300 dark:hover:border-slate-700"
                                         >
-                                            <i className="fa-solid fa-pen-to-square"></i> Upravit směnu
+                                            <i className="fa-solid fa-pen-to-square text-blue-500"></i> Upravit dnešní směnu
                                         </button>
+                                        {demoLiveMode && (
+                                            <button 
+                                                onClick={() => {
+                                                    setDemoLiveMode(false);
+                                                    localStorage.setItem('wt-demo-live', 'false');
+                                                    showToast('Simulace směny ukončena');
+                                                }}
+                                                className="w-full py-2.5 px-4 rounded-xl text-slate-400 hover:text-rose-500 font-semibold text-[11px] active:scale-95 transition-all text-center"
+                                            >
+                                                Ukončit testovací simulaci (Demo)
+                                            </button>
+                                        )}
                                     </div>
                                 </>
                             ) : (
@@ -2188,33 +2725,66 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
                             <div>
                                 <h3 className="font-bold text-[10px] uppercase text-slate-400 mb-2 tracking-widest pl-3">Režim Na směně (Live)</h3>
                                 <div className="bg-white dark:bg-slate-900 rounded-[2rem] overflow-hidden border border-slate-200/70 dark:border-slate-800/80 shadow-sm divide-y divide-slate-100 dark:divide-slate-800/60">
+                                    {/* Hlavní přepínač pro zapnutí/vypnutí celého menu Na směně */}
                                     <div className="flex items-center justify-between p-4">
                                         <div className="flex items-center gap-3">
-                                            <div className="bg-emerald-50 dark:bg-emerald-950/40 w-9 h-9 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${settings.liveShiftEnabled !== false ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
                                                 <i className="fa-solid fa-bolt text-sm"></i>
                                             </div>
                                             <div>
-                                                <span className="font-bold text-xs">Simulovat směnu (Demo)</span>
-                                                <p className="text-[10px] text-slate-400 font-medium">Vyzkoušej si živé počítadlo a statistiky i mimo pracovní dobu</p>
+                                                <span className="font-bold text-xs">Povolit menu „Na směně“</span>
+                                                <p className="text-[10px] text-slate-400 font-medium">Zobrazovat živou záložku v dolní liště při probíhající směně</p>
                                             </div>
                                         </div>
                                         <button 
                                             onClick={() => {
-                                                const next = !demoLiveMode;
-                                                setDemoLiveMode(next);
-                                                localStorage.setItem('wt-demo-live', next.toString());
-                                                if (next) {
-                                                    setActiveTab('live');
-                                                    showToast('Simulace směny aktivní! ⚡️');
+                                                const next = settings.liveShiftEnabled === false;
+                                                saveSettings({ ...settings, liveShiftEnabled: next });
+                                                if (!next) {
+                                                    setDemoLiveMode(false);
+                                                    localStorage.setItem('wt-demo-live', 'false');
+                                                    if (activeTab === 'live') setActiveTab('calendar');
+                                                    showToast('Menu Na směně vypnuto');
                                                 } else {
-                                                    showToast('Simulace vypnuta');
+                                                    showToast('Menu Na směně zapnuto ⚡️');
                                                 }
                                             }} 
-                                            className={`w-12 h-6 rounded-full transition-colors relative flex items-center shadow-inner ${demoLiveMode ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                            className={`w-12 h-6 rounded-full transition-colors relative flex items-center shadow-inner ${settings.liveShiftEnabled !== false ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
                                         >
-                                            <div className={`w-5 h-5 bg-white rounded-full absolute transition-transform shadow-sm ${demoLiveMode ? 'translate-x-6' : 'translate-x-1'}`}></div>
+                                            <div className={`w-5 h-5 bg-white rounded-full absolute transition-transform shadow-sm ${settings.liveShiftEnabled !== false ? 'translate-x-6' : 'translate-x-1'}`}></div>
                                         </button>
                                     </div>
+
+                                    {/* Simulovat směnu (pouze pokud je menu zapnuté) */}
+                                    {settings.liveShiftEnabled !== false && (
+                                        <div className="flex items-center justify-between p-4 bg-slate-50/50 dark:bg-slate-900/50">
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-blue-50 dark:bg-blue-950/40 w-9 h-9 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400">
+                                                    <i className="fa-solid fa-play text-xs"></i>
+                                                </div>
+                                                <div>
+                                                    <span className="font-bold text-xs">Simulovat směnu (Demo)</span>
+                                                    <p className="text-[10px] text-slate-400 font-medium">Vyzkoušej si živé počítadlo a statistiky i mimo pracovní dobu</p>
+                                                </div>
+                                            </div>
+                                            <button 
+                                                onClick={() => {
+                                                    const next = !demoLiveMode;
+                                                    setDemoLiveMode(next);
+                                                    localStorage.setItem('wt-demo-live', next.toString());
+                                                    if (next) {
+                                                        setActiveTab('live');
+                                                        showToast('Simulace směny aktivní! ⚡️');
+                                                    } else {
+                                                        showToast('Simulace vypnuta');
+                                                    }
+                                                }} 
+                                                className={`w-12 h-6 rounded-full transition-colors relative flex items-center shadow-inner ${demoLiveMode ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                            >
+                                                <div className={`w-5 h-5 bg-white rounded-full absolute transition-transform shadow-sm ${demoLiveMode ? 'translate-x-6' : 'translate-x-1'}`}></div>
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -2462,7 +3032,7 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
                                 { id: 'list', icon: 'fa-list-ul', label: 'Směny' }, 
                                 { id: 'payslip', icon: 'fa-file-invoice-dollar', label: 'Výplatnice' }
                             ];
-                            if (currentActiveShift) {
+                            if (currentActiveShift && settings.liveShiftEnabled !== false) {
                                 tabs.splice(1, 0, { id: 'live', icon: 'fa-bolt', label: 'Na směně', isLive: true });
                             }
                             return tabs.map(t => {
@@ -2495,54 +3065,56 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
                     {/* --- SHIFT EDITOR MODAL (iOS Bottom Sheet Style) --- */}
                     {editingDate && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center sm:p-4 animate-fade-in">
-                            <div className="bg-white dark:bg-slate-950 w-full sm:max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-6 shadow-2xl flex flex-col max-h-[92vh] animate-slide-up border-t border-slate-100 dark:border-slate-800 pb-safe">
+                            <div className="bg-white dark:bg-slate-950 w-full sm:max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-5 sm:p-6 shadow-2xl flex flex-col max-h-[90vh] sm:max-h-[85vh] animate-slide-up border-t border-slate-100 dark:border-slate-800 pb-safe">
                                 
-                                {/* Bottom sheet handle */}
-                                <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full mx-auto mb-4 sm:hidden"></div>
+                                {/* Bottom sheet handle & Header (pinned top) */}
+                                <div className="shrink-0">
+                                    <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full mx-auto mb-3 sm:hidden"></div>
 
-                                <div className="flex justify-between items-center mb-5">
-                                    <div>
-                                        <h3 className="font-black text-lg capitalize text-slate-900 dark:text-white">
-                                            {new Intl.DateTimeFormat('cs-CZ', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(editingDate))}
-                                        </h3>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Záznam dne</p>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <div>
+                                            <h3 className="font-black text-lg capitalize text-slate-900 dark:text-white">
+                                                {new Intl.DateTimeFormat('cs-CZ', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(editingDate))}
+                                            </h3>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Záznam dne</p>
+                                        </div>
+                                        <button 
+                                            onClick={() => setEditingDate(null)} 
+                                            className="w-9 h-9 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full flex items-center justify-center text-slate-500 active:scale-90 transition-all"
+                                        >
+                                            <i className="fa-solid fa-xmark text-sm"></i>
+                                        </button>
                                     </div>
-                                    <button 
-                                        onClick={() => setEditingDate(null)} 
-                                        className="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-500 active:scale-90 transition-transform"
-                                    >
-                                        <i className="fa-solid fa-xmark text-sm"></i>
-                                    </button>
+
+                                    {/* Segmented control: Směna / Dovolená / Nemocenská */}
+                                    <div className="relative flex bg-slate-100 dark:bg-slate-900 p-1.5 rounded-2xl mb-3">
+                                        <div className={`absolute top-1.5 bottom-1.5 w-[calc(33.33%-4px)] bg-white dark:bg-slate-800 rounded-xl shadow-sm transition-all duration-300 ease-out ${
+                                            editorType === 'work' ? 'left-1.5' : 
+                                            editorType === 'vacation' ? 'left-[calc(33.33%+2px)]' : 
+                                            'left-[calc(66.66%+2px)]'
+                                        }`}></div>
+                                        <button 
+                                            onClick={() => setEditorType('work')} 
+                                            className={`relative z-10 flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-200 ${editorType === 'work' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500'}`}
+                                        >
+                                            SMĚNA
+                                        </button>
+                                        <button 
+                                            onClick={() => { setEditorType('vacation'); setHoursValue('8'); }} 
+                                            className={`relative z-10 flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-200 ${editorType === 'vacation' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}`}
+                                        >
+                                            DOVOLENÁ
+                                        </button>
+                                        <button 
+                                            onClick={() => { setEditorType('sick'); setHoursValue('8'); }} 
+                                            className={`relative z-10 flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-200 ${editorType === 'sick' ? 'text-orange-600 dark:text-orange-400' : 'text-slate-500'}`}
+                                        >
+                                            NEMOC
+                                        </button>
+                                    </div>
                                 </div>
 
-                                {/* Segmented control: Směna / Dovolená / Nemocenská */}
-                                <div className="relative flex bg-slate-100 dark:bg-slate-900 p-1.5 rounded-2xl mb-5">
-                                    <div className={`absolute top-1.5 bottom-1.5 w-[calc(33.33%-4px)] bg-white dark:bg-slate-800 rounded-xl shadow-sm transition-all duration-300 ease-out ${
-                                        editorType === 'work' ? 'left-1.5' : 
-                                        editorType === 'vacation' ? 'left-[calc(33.33%+2px)]' : 
-                                        'left-[calc(66.66%+2px)]'
-                                    }`}></div>
-                                    <button 
-                                        onClick={() => setEditorType('work')} 
-                                        className={`relative z-10 flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-200 ${editorType === 'work' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500'}`}
-                                    >
-                                        SMĚNA
-                                    </button>
-                                    <button 
-                                        onClick={() => { setEditorType('vacation'); setHoursValue('8'); }} 
-                                        className={`relative z-10 flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-200 ${editorType === 'vacation' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}`}
-                                    >
-                                        DOVOLENÁ
-                                    </button>
-                                    <button 
-                                        onClick={() => { setEditorType('sick'); setHoursValue('8'); }} 
-                                        className={`relative z-10 flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-200 ${editorType === 'sick' ? 'text-orange-600 dark:text-orange-400' : 'text-slate-500'}`}
-                                    >
-                                        NEMOC
-                                    </button>
-                                </div>
-
-                                <div className="space-y-4 overflow-y-auto pb-2 px-1">
+                                <div className="flex-1 min-h-0 overflow-y-auto space-y-3.5 pb-2 px-0.5">
                                     {editorType === 'work' ? (
                                         <>
                                             {/* Quick Shift Presets Bar */}
@@ -2745,12 +3317,12 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
                                     </div>
                                 </div>
 
-                                {/* Modal Actions */}
-                                <div className="flex gap-2.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/60">
+                                {/* Pinned Fixed Modal Actions Footer */}
+                                <div className="shrink-0 flex gap-2.5 pt-3 mt-1 border-t border-slate-100 dark:border-slate-800/80 bg-white dark:bg-slate-950">
                                     {shifts[editingDate] && (
                                         <button 
                                             onClick={handleDeleteShift} 
-                                            className="p-3.5 bg-rose-50 dark:bg-rose-950/30 text-rose-500 rounded-2xl active:scale-90 transition-transform aspect-square flex items-center justify-center border border-rose-200/50 dark:border-rose-900/30"
+                                            className="p-3.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 text-rose-500 rounded-2xl active:scale-90 transition-all aspect-square flex items-center justify-center border border-rose-200/50 dark:border-rose-900/30"
                                             title="Smazat směnu"
                                         >
                                             <i className="fa-solid fa-trash text-sm"></i>
@@ -2850,6 +3422,279 @@ ${monthlyData.isUniformActive && monthlyData.uniformPay > 0 ? `👕 Osvobozeno (
                                     </button>
                                 </div>
                             </form>
+                        </div>
+                    )}
+
+                    {/* --- EXPORT PREHLEDU MODAL (iOS Bottom Sheet Style) --- */}
+                    {showExportModal && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center sm:p-4 animate-fade-in">
+                            <div className="bg-white dark:bg-slate-950 w-full sm:max-w-lg rounded-t-[2.5rem] sm:rounded-[2.5rem] p-6 shadow-2xl flex flex-col max-h-[92vh] animate-slide-up border-t border-slate-100 dark:border-slate-800 pb-safe">
+                                
+                                {/* Bottom sheet handle for mobile */}
+                                <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full mx-auto mb-4 sm:hidden"></div>
+
+                                {/* Modal Header */}
+                                <div className="flex justify-between items-center mb-4">
+                                    <div>
+                                        <h3 className="font-black text-lg text-slate-900 dark:text-white flex items-center gap-2">
+                                            <i className="fa-solid fa-arrow-up-from-bracket text-blue-600 text-base"></i> Export přehledu
+                                        </h3>
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                                            {new Intl.DateTimeFormat('cs-CZ', { month: 'long', year: 'numeric' }).format(currentDate)}
+                                        </p>
+                                    </div>
+                                    <button 
+                                        onClick={() => setShowExportModal(false)} 
+                                        className="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-500 active:scale-90 transition-transform"
+                                    >
+                                        <i className="fa-solid fa-xmark text-sm"></i>
+                                    </button>
+                                </div>
+
+                                {/* Scrollable content */}
+                                <div className="overflow-y-auto space-y-4 pr-1 pb-2">
+                                    {/* 1. Format Selector (Segmented control) */}
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 mb-1.5 block tracking-wider">Formát exportu</label>
+                                        <div className="grid grid-cols-3 gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl">
+                                            {[
+                                                { id: 'text', label: 'Standardní', icon: 'fa-file-lines' },
+                                                { id: 'compact', label: 'Kompaktní', icon: 'fa-comment-dots' },
+                                                { id: 'csv', label: 'CSV (Excel)', icon: 'fa-file-excel' }
+                                            ].map(fmt => (
+                                                <button
+                                                    key={fmt.id}
+                                                    type="button"
+                                                    onClick={() => setExportFormat(fmt.id)}
+                                                    className={`py-2 px-1 text-center rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                                                        exportFormat === fmt.id
+                                                            ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                                                            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                                    }`}
+                                                >
+                                                    <i className={`fa-solid ${fmt.icon} text-[11px]`}></i>
+                                                    <span>{fmt.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* 2. Rychlé předvolby nastavení */}
+                                    {exportFormat !== 'csv' && (
+                                        <div>
+                                            <label className="text-[10px] font-bold uppercase text-slate-400 mb-1.5 block tracking-wider">Rychlé předvolby</label>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => applyExportPreset('all')} 
+                                                    className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/40 active:scale-95 transition-all"
+                                                >
+                                                    🎯 Kompletní rozpis
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => applyExportPreset('shiftsOnly')} 
+                                                    className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 active:scale-95 transition-all"
+                                                >
+                                                    ⏱️ Jen směny a hodiny
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => applyExportPreset('financialOnly')} 
+                                                    className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 active:scale-95 transition-all"
+                                                >
+                                                    💰 Pouze finance
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* 3. Podrobná nastavení položek */}
+                                    {exportFormat !== 'csv' && (
+                                        <div className="space-y-3">
+                                            {/* Sekce: Rozpis směn */}
+                                            <div>
+                                                <label className="text-[10px] font-bold uppercase text-slate-400 mb-1.5 block tracking-wider">Rozpis směn</label>
+                                                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800/60">
+                                                    <div className="flex items-center justify-between p-3">
+                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Zahrnout směny den po dni</span>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => setExportConfig(c => ({ ...c, includeShiftList: !c.includeShiftList }))}
+                                                            className={`w-10 h-6 rounded-full relative transition-colors ${exportConfig.includeShiftList ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                        >
+                                                            <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs ${exportConfig.includeShiftList ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+                                                        </button>
+                                                    </div>
+
+                                                    {exportConfig.includeShiftList && (
+                                                        <>
+                                                            <div className="flex items-center justify-between p-3 pl-6 bg-slate-50/50 dark:bg-slate-900/40">
+                                                                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Konkrétní časy směn (např. 06:00–14:00)</span>
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => setExportConfig(c => ({ ...c, includeShiftTimes: !c.includeShiftTimes }))}
+                                                                    className={`w-9 h-5 rounded-full relative transition-colors ${exportConfig.includeShiftTimes ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                                >
+                                                                    <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs ${exportConfig.includeShiftTimes ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+                                                                </button>
+                                                            </div>
+                                                            <div className="flex items-center justify-between p-3 pl-6 bg-slate-50/50 dark:bg-slate-900/40">
+                                                                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Počet hodin u každé směny</span>
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => setExportConfig(c => ({ ...c, includeShiftHours: !c.includeShiftHours }))}
+                                                                    className={`w-9 h-5 rounded-full relative transition-colors ${exportConfig.includeShiftHours ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                                >
+                                                                    <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs ${exportConfig.includeShiftHours ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+                                                                </button>
+                                                            </div>
+                                                            <div className="flex items-center justify-between p-3 pl-6 bg-slate-50/50 dark:bg-slate-900/40">
+                                                                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Výdělek u každé směny (v Kč)</span>
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => setExportConfig(c => ({ ...c, includeShiftPay: !c.includeShiftPay }))}
+                                                                    className={`w-9 h-5 rounded-full relative transition-colors ${exportConfig.includeShiftPay ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                                >
+                                                                    <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs ${exportConfig.includeShiftPay ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+                                                                </button>
+                                                            </div>
+                                                            <div className="flex items-center justify-between p-3 pl-6 bg-slate-50/50 dark:bg-slate-900/40">
+                                                                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Typ úvazku [HPP/DPČ/DPP]</span>
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => setExportConfig(c => ({ ...c, includeContractType: !c.includeContractType }))}
+                                                                    className={`w-9 h-5 rounded-full relative transition-colors ${exportConfig.includeContractType ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                                >
+                                                                    <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs ${exportConfig.includeContractType ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+                                                                </button>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Sekce: Finanční a mzdový souhrn */}
+                                            <div>
+                                                <label className="text-[10px] font-bold uppercase text-slate-400 mb-1.5 block tracking-wider">Finanční a mzdový souhrn</label>
+                                                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800/60">
+                                                    <div className="flex items-center justify-between p-3">
+                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Celkový počet hodin a směn</span>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => setExportConfig(c => ({ ...c, includeWorkedHours: !c.includeWorkedHours }))}
+                                                            className={`w-10 h-6 rounded-full relative transition-colors ${exportConfig.includeWorkedHours ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                        >
+                                                            <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs ${exportConfig.includeWorkedHours ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+                                                        </button>
+                                                    </div>
+                                                    <div className="flex items-center justify-between p-3">
+                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Hrubá mzda</span>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => setExportConfig(c => ({ ...c, includeGross: !c.includeGross }))}
+                                                            className={`w-10 h-6 rounded-full relative transition-colors ${exportConfig.includeGross ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                        >
+                                                            <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs ${exportConfig.includeGross ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+                                                        </button>
+                                                    </div>
+                                                    <div className="flex items-center justify-between p-3">
+                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Rozpis příplatků (noční, víkendy, svátky)</span>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => setExportConfig(c => ({ ...c, includeBonuses: !c.includeBonuses }))}
+                                                            className={`w-10 h-6 rounded-full relative transition-colors ${exportConfig.includeBonuses ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                        >
+                                                            <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs ${exportConfig.includeBonuses ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+                                                        </button>
+                                                    </div>
+                                                    <div className="flex items-center justify-between p-3">
+                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Položkový rozpis odvodů (SZ, ZP, daň)</span>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => setExportConfig(c => ({ ...c, includeDeductions: !c.includeDeductions }))}
+                                                            className={`w-10 h-6 rounded-full relative transition-colors ${exportConfig.includeDeductions ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                        >
+                                                            <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs ${exportConfig.includeDeductions ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+                                                        </button>
+                                                    </div>
+                                                    {settings.uniformEnabled && (
+                                                        <div className="flex items-center justify-between p-3">
+                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Příspěvek na uniformu</span>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => setExportConfig(c => ({ ...c, includeUniform: !c.includeUniform }))}
+                                                                className={`w-10 h-6 rounded-full relative transition-colors ${exportConfig.includeUniform ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                            >
+                                                                <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs ${exportConfig.includeUniform ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex items-center justify-between p-3">
+                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Čistá mzda / Celkem k výplatě</span>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => setExportConfig(c => ({ ...c, includeNetTotal: !c.includeNetTotal }))}
+                                                            className={`w-10 h-6 rounded-full relative transition-colors ${exportConfig.includeNetTotal ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                        >
+                                                            <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs ${exportConfig.includeNetTotal ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* 4. Živý náhled generované zprávy */}
+                                    <div>
+                                        <div className="flex justify-between items-center mb-1.5 px-0.5">
+                                            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Živý náhled zprávy</label>
+                                            <span className="text-[10px] text-slate-400 font-mono">
+                                                {generatedExportText.split('\n').length} řádků
+                                            </span>
+                                        </div>
+                                        <pre className="max-h-36 overflow-y-auto bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 text-[11px] font-mono text-slate-800 dark:text-slate-200 whitespace-pre-wrap select-all leading-relaxed shadow-inner">
+                                            {generatedExportText}
+                                        </pre>
+                                    </div>
+                                </div>
+
+                                {/* Modal Bottom Actions */}
+                                <div className="flex gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/60">
+                                    <button 
+                                        type="button" 
+                                        onClick={handleDownloadExportFile} 
+                                        className="py-3 px-3.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold rounded-2xl active:scale-95 transition-transform text-xs flex items-center justify-center gap-1.5 border border-slate-200/80 dark:border-slate-700"
+                                        title="Stáhnout jako soubor"
+                                    >
+                                        <i className="fa-solid fa-download"></i>
+                                        <span className="hidden sm:inline">Stáhnout</span>
+                                    </button>
+
+                                    {navigator.share && (
+                                        <button 
+                                            type="button" 
+                                            onClick={handleShareExportText} 
+                                            className="py-3 px-3.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold rounded-2xl active:scale-95 transition-transform text-xs flex items-center justify-center gap-1.5 border border-slate-200/80 dark:border-slate-700"
+                                            title="Sdílet v systému"
+                                        >
+                                            <i className="fa-solid fa-arrow-up-from-bracket"></i>
+                                            <span className="hidden sm:inline">Sdílet</span>
+                                        </button>
+                                    )}
+
+                                    <button 
+                                        type="button" 
+                                        onClick={() => {
+                                            handleCopyExportText();
+                                            setShowExportModal(false);
+                                        }} 
+                                        className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-blue-500/25 active:scale-95 transition-transform flex items-center justify-center gap-2 text-xs uppercase tracking-wider"
+                                    >
+                                        <i className="fa-regular fa-copy"></i> Zkopírovat do schránky
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
