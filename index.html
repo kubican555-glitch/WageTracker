@@ -925,6 +925,7 @@
             const touchStartY = useRef(0);
             const touchEndY = useRef(0);
             const swipeDistance = useRef(0);
+            const endInputRef = useRef(null);
 
             // Export přehledu a konfigurace zprávy
             const [showExportModal, setShowExportModal] = useState(false);
@@ -2543,6 +2544,11 @@
             };
 
             const handleTouchStart = (e) => { 
+                if (e.target && e.target.closest && e.target.closest('.overflow-x-auto, .no-swipe')) {
+                    touchStartX.current = 0;
+                    touchEndX.current = 0;
+                    return;
+                }
                 touchStartX.current = e.targetTouches[0].clientX; 
                 touchStartY.current = e.targetTouches[0].clientY; 
                 touchEndX.current = e.targetTouches[0].clientX; 
@@ -2551,6 +2557,11 @@
             };
 
             const handleTouchMove = (e) => { 
+                if (touchStartX.current === 0) return;
+                if (e.target && e.target.closest && e.target.closest('.overflow-x-auto, .no-swipe')) {
+                    touchStartX.current = 0;
+                    return;
+                }
                 touchEndX.current = e.targetTouches[0].clientX; 
                 touchEndY.current = e.targetTouches[0].clientY; 
                 const diffX = touchStartX.current - touchEndX.current;
@@ -2559,6 +2570,7 @@
             };
 
             const handleTouchEnd = () => {
+                if (touchStartX.current === 0) return;
                 const diffX = touchStartX.current - touchEndX.current; 
                 const diffY = touchStartY.current - touchEndY.current;
                 if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 45) {
@@ -2574,17 +2586,99 @@
                 touchEndY.current = 0;
             };
             
-            const displayStart = startHour + startMin;
-            let formattedStart = displayStart;
-            if (displayStart.length >= 3) {
-                formattedStart = displayStart.slice(0, 2) + ':' + displayStart.slice(2);
-            }
-            
-            const displayEnd = endHour + endMin;
-            let formattedEnd = displayEnd;
-            if (displayEnd.length >= 3) {
-                formattedEnd = displayEnd.slice(0, 2) + ':' + displayEnd.slice(2);
-            }
+            const parseSmartTime = (rawVal) => {
+                const digits = (rawVal || '').replace(/\D/g, '');
+                if (!digits) return { h: '', m: '' };
+                if (digits.length === 1) {
+                    return { h: digits.padStart(2, '0'), m: '00' };
+                } else if (digits.length === 2) {
+                    const h = parseInt(digits, 10);
+                    return { h: String(h > 23 ? 23 : h).padStart(2, '0'), m: '00' };
+                } else if (digits.length === 3) {
+                    // 3 číslice v 24h formátu: např. 615 -> 06:15, 730 -> 07:30, 945 -> 09:45
+                    const h = parseInt(digits.slice(0, 1), 10);
+                    const m = parseInt(digits.slice(1, 3), 10);
+                    return { h: String(h).padStart(2, '0'), m: String(m > 59 ? 59 : m).padStart(2, '0') };
+                } else {
+                    // 4+ číslice: např. 0615 -> 06:15, 1430 -> 14:30
+                    const h = parseInt(digits.slice(0, 2), 10);
+                    const m = parseInt(digits.slice(2, 4), 10);
+                    return { h: String(h > 23 ? 23 : h).padStart(2, '0'), m: String(m > 59 ? 59 : m).padStart(2, '0') };
+                }
+            };
+
+            const normalizeTime = (h, m) => {
+                const combined = (h || '') + (m || '');
+                return parseSmartTime(combined);
+            };
+
+            const handleTimeInputChange = (inputStr, setH, setM, onComplete = null) => {
+                const digits = (inputStr || '').replace(/\D/g, '');
+                if (digits.length === 0) {
+                    setH('');
+                    setM('');
+                    return;
+                }
+                if (digits.length === 1) {
+                    setH(digits);
+                    setM('');
+                    return;
+                }
+                if (digits.length === 2) {
+                    const valInt = parseInt(digits, 10);
+                    if (valInt <= 23) {
+                        setH(digits);
+                        setM('');
+                    } else {
+                        // Číslo > 23 (např. 61 při psaní 615, 73 při 730): hodina 6, minuta 1
+                        setH(digits.slice(0, 1));
+                        setM(digits.slice(1));
+                    }
+                    return;
+                }
+                if (digits.length === 3) {
+                    const first2 = parseInt(digits.slice(0, 2), 10);
+                    if (first2 > 23) {
+                        // např. 615, 730, 845 -> plně definovaný čas (1 číslice hodina + 2 číslice minuty)
+                        const h = digits.slice(0, 1);
+                        const mRaw = parseInt(digits.slice(1, 3), 10);
+                        const m = String(mRaw > 59 ? 59 : mRaw).padStart(2, '0');
+                        setH(h);
+                        setM(m);
+                        if (onComplete) onComplete();
+                    } else {
+                        // např. 143 (14:3), 061 (06:1), 220 (22:0)
+                        setH(digits.slice(0, 2));
+                        setM(digits.slice(2));
+                    }
+                    return;
+                }
+                // 4 a více číslic: plně definovaný čas (např. 0615 nebo 1430)
+                const first2 = parseInt(digits.slice(0, 2), 10);
+                if (first2 > 23) {
+                    const h = digits.slice(0, 1);
+                    const mRaw = parseInt(digits.slice(1, 3), 10);
+                    const m = String(mRaw > 59 ? 59 : mRaw).padStart(2, '0');
+                    setH(h);
+                    setM(m);
+                    if (onComplete) onComplete();
+                } else {
+                    const h = digits.slice(0, 2);
+                    const mRaw = parseInt(digits.slice(2, 4), 10);
+                    const m = String(mRaw > 59 ? 59 : mRaw).padStart(2, '0');
+                    setH(h);
+                    setM(m);
+                    if (onComplete) onComplete();
+                }
+            };
+
+            const formatTimeDisplay = (h, m) => {
+                if (!h && !m) return '';
+                if (h && !m) return h;
+                return `${h}:${m}`;
+            };
+            const formattedStart = formatTimeDisplay(startHour, startMin);
+            const formattedEnd = formatTimeDisplay(endHour, endMin);
 
             if (isInitializing) return (
                 <div className="min-h-screen flex flex-col items-center justify-center dark:bg-slate-950 transition-colors duration-500">
@@ -3996,12 +4090,27 @@
 
                             {/* 7. HEATMAPA VÝDĚLKŮ (Aktivní kalendářní mapa směn) */}
                             {(() => {
-                                // Pomocná funkce pro zjištění barvy podle výše čistého výdělku
+                                // Dynamický výpočet maxima podle skutečných směn (zaokrouhleno na hezké číslo po 100 Kč)
+                                const activeItems = statsHeatmapView === 'month' 
+                                    ? monthHeatmapData 
+                                    : yearHeatmapWeeks.flatMap(w => w.filter(d => d.isCurrentYear));
+                                
+                                const maxShiftNet = activeItems.reduce((max, d) => (d.hasShift && d.net > max ? d.net : max), 0);
+                                // Pokud nejsou žádné směny, default je 1000 Kč; jinak zaokrouhlíme nahoru na celé stovky
+                                const heatmapMax = maxShiftNet > 0 
+                                    ? Math.max(400, Math.ceil(maxShiftNet / 100) * 100) 
+                                    : 2000;
+                                
+                                const t1 = Math.round(heatmapMax * 0.25);
+                                const t2 = Math.round(heatmapMax * 0.50);
+                                const t3 = Math.round(heatmapMax * 0.75);
+
+                                // Pomocná funkce pro zjištění barvy podle dynamického maxima
                                 const getHeatmapColor = (net, hasShift) => {
                                     if (!hasShift || net <= 0) return 'bg-slate-100 dark:bg-slate-800/80 border-slate-200/60 dark:border-slate-800/60 text-slate-400';
-                                    if (net < 1000) return 'bg-emerald-200/90 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800/60';
-                                    if (net < 2000) return 'bg-emerald-400 dark:bg-emerald-700 text-white border-emerald-500 dark:border-emerald-600 shadow-xs';
-                                    if (net < 3000) return 'bg-emerald-500 dark:bg-emerald-600 text-white border-emerald-600 dark:border-emerald-500 shadow-xs';
+                                    if (net < t1) return 'bg-emerald-200/90 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800/60';
+                                    if (net < t2) return 'bg-emerald-400 dark:bg-emerald-700 text-white border-emerald-500 dark:border-emerald-600 shadow-xs';
+                                    if (net < t3) return 'bg-emerald-500 dark:bg-emerald-600 text-white border-emerald-600 dark:border-emerald-500 shadow-xs';
                                     return 'bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-700 dark:border-emerald-400 shadow-sm ring-1 ring-emerald-400/50';
                                 };
 
@@ -4088,7 +4197,12 @@
                                         {/* B) CELOROČNÍ GITHUB-STYLE HEATMAPA */}
                                         {statsHeatmapView === 'year' && (
                                             <div className="space-y-3 animate-fade-in">
-                                                <div className="overflow-x-auto pb-2 scrollbar-none">
+                                                <div 
+                                                    className="overflow-x-auto pb-2 scrollbar-none touch-pan-x"
+                                                    onTouchStart={e => e.stopPropagation()}
+                                                    onTouchMove={e => e.stopPropagation()}
+                                                    onTouchEnd={e => e.stopPropagation()}
+                                                >
                                                     <div className="flex gap-1 min-w-[580px]">
                                                         {yearHeatmapWeeks.map((week, wIdx) => (
                                                             <div key={wIdx} className="flex flex-col gap-1 flex-1">
@@ -4127,13 +4241,13 @@
                                         <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/60 text-[9px] text-slate-400">
                                             <span>Méně (0 Kč)</span>
                                             <div className="flex items-center gap-1">
-                                                <span className="w-3.5 h-3.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"></span>
-                                                <span className="w-3.5 h-3.5 rounded bg-emerald-200 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800/60"></span>
-                                                <span className="w-3.5 h-3.5 rounded bg-emerald-400 dark:bg-emerald-700"></span>
-                                                <span className="w-3.5 h-3.5 rounded bg-emerald-500 dark:bg-emerald-600"></span>
-                                                <span className="w-3.5 h-3.5 rounded bg-emerald-600 dark:bg-emerald-500"></span>
+                                                <span className="w-3.5 h-3.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700" title="0 Kč"></span>
+                                                <span className="w-3.5 h-3.5 rounded bg-emerald-200 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800/60" title={`Do ${t1.toLocaleString('cs-CZ')} Kč`}></span>
+                                                <span className="w-3.5 h-3.5 rounded bg-emerald-400 dark:bg-emerald-700" title={`Do ${t2.toLocaleString('cs-CZ')} Kč`}></span>
+                                                <span className="w-3.5 h-3.5 rounded bg-emerald-500 dark:bg-emerald-600" title={`Do ${t3.toLocaleString('cs-CZ')} Kč`}></span>
+                                                <span className="w-3.5 h-3.5 rounded bg-emerald-600 dark:bg-emerald-500" title={`${heatmapMax.toLocaleString('cs-CZ')} Kč a více`}></span>
                                             </div>
-                                            <span>Více (3 000+ Kč)</span>
+                                            <span>Více ({heatmapMax.toLocaleString('cs-CZ')}+ Kč)</span>
                                         </div>
 
                                         {/* Interaktivní detail vybraného dne */}
@@ -4930,15 +5044,15 @@
                     )}
 
                     {/* --- BOTTOM FLOATING NAVIGATION BAR (Apple Floating Dock) --- */}
-                    <nav className="fixed bottom-6 left-3 right-3 max-w-md mx-auto bg-white/85 dark:bg-slate-900/85 backdrop-blur-2xl border border-slate-200/80 dark:border-slate-800/80 rounded-[2.2rem] py-2 px-2 flex justify-around items-center z-40 shadow-[0_12px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
+                    <nav className="fixed bottom-6 left-3 right-3 max-w-md mx-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-slate-200/80 dark:border-slate-800/80 rounded-[2.2rem] py-2 px-1.5 flex justify-around items-center z-40 shadow-[0_12px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
                         {(() => {
                             const tabs = [
                                 { id: 'calendar', icon: 'fa-calendar-days', label: 'Kalendář' }, 
                                 { id: 'list', icon: 'fa-list-ul', label: 'Směny' }, 
-                                { id: 'payslip', icon: 'fa-file-invoice-dollar', label: 'Výplatnice' }
+                                { id: 'payslip', icon: 'fa-file-invoice-dollar', label: 'Výplata' }
                             ];
                             if (settings.showStatsTab !== false) {
-                                tabs.push({ id: 'stats', icon: 'fa-chart-pie', label: 'Statistiky' });
+                                tabs.push({ id: 'stats', icon: 'fa-chart-pie', label: 'Staty' });
                             }
                             if (currentActiveShift && settings.liveShiftEnabled !== false) {
                                 tabs.splice(1, 0, { id: 'live', icon: 'fa-bolt', label: 'Na směně', isLive: true });
@@ -4949,7 +5063,7 @@
                                     <button 
                                         key={t.id} 
                                         onClick={() => setActiveTab(t.id)} 
-                                        className={`relative flex flex-col items-center justify-center ${tabs.length >= 5 ? 'w-14 sm:w-16' : 'w-16 sm:w-20'} py-1.5 rounded-2xl transition-all duration-200 active:scale-95 ${
+                                        className={`relative flex-1 max-w-[4.25rem] flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl transition-all duration-200 active:scale-95 ${
                                             isActive 
                                                 ? (t.isLive ? 'text-emerald-500 dark:text-emerald-400 bg-emerald-500/15' : 'text-blue-600 dark:text-blue-400 bg-blue-500/12 dark:bg-blue-400/15')
                                                 : (t.isLive ? 'text-emerald-500/80 hover:text-emerald-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300')
@@ -4961,7 +5075,7 @@
                                                 <span className="w-2 h-2 rounded-full bg-emerald-500 absolute -top-0.5 -right-1 shadow-xs shadow-emerald-500/50 animate-pulse"></span>
                                             )}
                                         </div>
-                                        <span className={`text-[9px] uppercase tracking-wider truncate max-w-full px-0.5 ${isActive ? 'font-black' : 'font-semibold'}`}>
+                                        <span className={`text-[9px] uppercase tracking-tight whitespace-nowrap leading-tight text-center ${isActive ? 'font-black' : 'font-semibold'}`}>
                                             {t.label}
                                         </span>
                                     </button>
@@ -5131,23 +5245,36 @@
                                                             maxLength={5} 
                                                             value={formattedStart} 
                                                             onFocus={e => e.target.select()}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') {
+                                                                    const norm = normalizeTime(startHour, startMin);
+                                                                    setStartHour(norm.h);
+                                                                    setStartMin(norm.m);
+                                                                    if (endInputRef.current) {
+                                                                        endInputRef.current.focus();
+                                                                        endInputRef.current.select();
+                                                                    } else {
+                                                                        e.target.blur();
+                                                                    }
+                                                                }
+                                                            }}
                                                             onBlur={() => {
-                                                                if (startHour !== '' && startMin === '') {
-                                                                    setStartMin('00');
+                                                                if (startHour !== '' || startMin !== '') {
+                                                                    const norm = normalizeTime(startHour, startMin);
+                                                                    setStartHour(norm.h);
+                                                                    setStartMin(norm.m);
                                                                 }
                                                             }}
                                                             onChange={e => {
-                                                                const val = e.target.value.replace(/\D/g, '');
-                                                                if (val.length === 0) { setStartHour(''); setStartMin(''); }
-                                                                else if (val.length <= 2) {
-                                                                    if (parseInt(val, 10) > 23) return;
-                                                                    setStartHour(val); setStartMin('');
-                                                                }
-                                                                else if (val.length <= 4) {
-                                                                    const h = val.slice(0, 2); const m = val.slice(2, 4);
-                                                                    if (parseInt(m, 10) > 59) return;
-                                                                    setStartHour(h); setStartMin(m);
-                                                                }
+                                                                handleTimeInputChange(e.target.value, setStartHour, setStartMin, () => {
+                                                                    // Automatické přeskočení na konec směny jakmile je zadán celý čas
+                                                                    setTimeout(() => {
+                                                                        if (endInputRef.current) {
+                                                                            endInputRef.current.focus();
+                                                                            endInputRef.current.select();
+                                                                        }
+                                                                    }, 10);
+                                                                });
                                                             }} 
                                                             className="w-20 text-center text-2xl font-black bg-transparent outline-none text-slate-800 dark:text-slate-100 tracking-wider" 
                                                             placeholder="00:00" 
@@ -5160,30 +5287,29 @@
 
                                                     <div className="bg-white dark:bg-slate-900 px-3.5 py-2.5 rounded-2xl shadow-sm border border-slate-200/90 dark:border-slate-800 transition-all focus-within:border-blue-500 focus-within:ring-2 ring-blue-500/20">
                                                         <input 
+                                                            ref={endInputRef}
                                                             type="text" 
                                                             inputMode="numeric" 
                                                             pattern="[0-9]*" 
                                                             maxLength={5} 
                                                             value={formattedEnd} 
                                                             onFocus={e => e.target.select()}
-                                                            onBlur={() => {
-                                                                if (endHour !== '' && endMin === '') {
-                                                                    setEndMin('00');
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') {
+                                                                    const norm = normalizeTime(endHour, endMin);
+                                                                    setEndHour(norm.h);
+                                                                    setEndMin(norm.m);
+                                                                    e.target.blur();
                                                                 }
                                                             }}
-                                                            onChange={e => {
-                                                                const val = e.target.value.replace(/\D/g, '');
-                                                                if (val.length === 0) { setEndHour(''); setEndMin(''); }
-                                                                else if (val.length <= 2) {
-                                                                    if (parseInt(val, 10) > 23) return;
-                                                                    setEndHour(val); setEndMin('');
+                                                            onBlur={() => {
+                                                                if (endHour !== '' || endMin !== '') {
+                                                                    const norm = normalizeTime(endHour, endMin);
+                                                                    setEndHour(norm.h);
+                                                                    setEndMin(norm.m);
                                                                 }
-                                                                else if (val.length <= 4) {
-                                                                    const h = val.slice(0, 2); const m = val.slice(2, 4);
-                                                                    if (parseInt(m, 10) > 59) return;
-                                                                    setEndHour(h); setEndMin(m);
-                                                                }
-                                                            }} 
+                                                            }}
+                                                            onChange={e => handleTimeInputChange(e.target.value, setEndHour, setEndMin)} 
                                                             className="w-20 text-center text-2xl font-black bg-transparent outline-none text-slate-800 dark:text-slate-100 tracking-wider" 
                                                             placeholder="00:00" 
                                                         />
