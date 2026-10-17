@@ -234,6 +234,68 @@
         .animate-month-slide-left {
             animation: slideInFromLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
+
+        /* Modern CSS View Transitions API Styling */
+        ::view-transition-old(root),
+        ::view-transition-new(root) {
+            animation-duration: 0.22s;
+            animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        ::view-transition-old(root) {
+            animation-name: vt-fade-out;
+        }
+        ::view-transition-new(root) {
+            animation-name: vt-fade-in;
+        }
+
+        @keyframes vt-fade-out {
+            from { opacity: 1; transform: scale(1); }
+            to { opacity: 0; transform: scale(0.985); }
+        }
+        @keyframes vt-fade-in {
+            from { opacity: 0; transform: scale(1.015); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            ::view-transition-group(*),
+            ::view-transition-old(*),
+            ::view-transition-new(*) {
+                animation: none !important;
+            }
+        }
+
+        /* Modern Native HTML Popover & Dialog Support */
+        [popover] {
+            border: none;
+            padding: 0;
+            background: transparent;
+            margin: 0;
+            inset: auto;
+        }
+        [popover]:popover-open {
+            display: block;
+        }
+        [popover]::backdrop {
+            background: rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+
+        dialog.native-modal {
+            border: none;
+            padding: 0;
+            background: transparent;
+            max-width: 100vw;
+            max-height: 100vh;
+            margin: auto;
+            outline: none;
+        }
+        dialog.native-modal::backdrop {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
     </style>
 
     <script>
@@ -1056,8 +1118,19 @@
             const [globalError, setGlobalError] = useState('');
             const [activePin, setActivePin] = useState(() => localStorage.getItem('wage-tracker-pin'));
             const [profileName, setProfileName] = useState('');
-            const [activeTab, setActiveTab] = useState('calendar'); 
             const [currentDate, setCurrentDate] = useState(new Date());
+            const [activeTab, setActiveTabRaw] = useState('calendar'); 
+            const setActiveTab = (newTab) => {
+                if (typeof document !== 'undefined' && document.startViewTransition) {
+                    document.startViewTransition(() => {
+                        ReactDOM.flushSync(() => {
+                            setActiveTabRaw(newTab);
+                        });
+                    });
+                } else {
+                    setActiveTabRaw(newTab);
+                }
+            };
             const [shifts, setShifts] = useState({});
             const [editingDate, setEditingDate] = useState(null);
             const [selectedDaySummary, setSelectedDaySummary] = useState(null); // dateStr for quick preview sheet
