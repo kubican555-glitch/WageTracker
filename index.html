@@ -2699,15 +2699,25 @@
                     {/* --- App Header --- */}
                     <header className="flex justify-between items-center mb-4 pt-1 px-1">
                         <div className="flex items-center gap-3">
-                            <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-2.5 rounded-2xl text-white shadow-md shadow-blue-500/20 w-11 h-11 flex items-center justify-center">
-                                <i className="fa-solid fa-wallet text-lg"></i>
-                            </div>
-                            <div>
-                                <h1 className="text-lg font-black italic tracking-tight text-slate-900 dark:text-white leading-tight">WageTracker</h1>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                                    {profileName ? `Ahoj, ${profileName.split(' ')[0]}` : 'Moje výplata'}
-                                </p>
-                            </div>
+                            <button 
+                                type="button"
+                                onClick={() => {
+                                    setActiveTab('calendar');
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
+                                className="flex items-center gap-3 text-left group focus:outline-none cursor-pointer active:scale-95 transition-transform"
+                                title="Zpět na kalendář"
+                            >
+                                <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-2.5 rounded-2xl text-white shadow-md shadow-blue-500/20 w-11 h-11 flex items-center justify-center group-hover:shadow-blue-500/35 transition-shadow">
+                                    <i className="fa-solid fa-wallet text-lg"></i>
+                                </div>
+                                <div>
+                                    <h1 className="text-lg font-black italic tracking-tight text-slate-900 dark:text-white leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">WageTracker</h1>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                        {profileName ? `Ahoj, ${profileName.split(' ')[0]}` : 'Moje výplata'}
+                                    </p>
+                                </div>
+                            </button>
                         </div>
                         <div className="flex items-center gap-2">
                             <button 
@@ -5062,7 +5072,10 @@
                                 return (
                                     <button 
                                         key={t.id} 
-                                        onClick={() => setActiveTab(t.id)} 
+                                        onClick={() => {
+                                            setActiveTab(t.id);
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }} 
                                         className={`relative flex-1 max-w-[4.25rem] flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl transition-all duration-200 active:scale-95 ${
                                             isActive 
                                                 ? (t.isLive ? 'text-emerald-500 dark:text-emerald-400 bg-emerald-500/15' : 'text-blue-600 dark:text-blue-400 bg-blue-500/12 dark:bg-blue-400/15')
