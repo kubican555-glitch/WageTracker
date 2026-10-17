@@ -464,43 +464,217 @@
             );
         };
 
-        // --- Shared Month Navigation Bar Component ---
-        const MonthPickerBar = ({ currentDate, year, month, isViewingCurrentMonth, setCurrentDate, onPrevMonth, onNextMonth }) => (
-            <div className="flex items-center justify-between bg-white dark:bg-slate-900 px-3 py-2.5 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 shadow-sm">
-                <button 
-                    type="button"
-                    onClick={onPrevMonth ? onPrevMonth : () => setCurrentDate(new Date(year, month - 1, 1))} 
-                    className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-90 transition-all"
-                    title="Předchozí měsíc"
-                >
-                    <i className="fa-solid fa-chevron-left text-sm"></i>
-                </button>
-                
-                <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-sm uppercase tracking-wide text-slate-800 dark:text-slate-100">
-                        {new Intl.DateTimeFormat('cs-CZ', { month: 'long', year: 'numeric' }).format(currentDate)}
-                    </span>
-                    {!isViewingCurrentMonth && (
+        // --- Shared Month Navigation Bar Component with Quick Month Selector ---
+        const MonthPickerBar = ({ currentDate, year, month, isViewingCurrentMonth, setCurrentDate, onPrevMonth, onNextMonth, shifts }) => {
+            const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+            const selectorRef = useRef(null);
+
+            // Výpočet dostupných měsíců: začíná prvním aktivním měsícem se směnami
+            const availableMonths = useMemo(() => {
+                const now = new Date();
+                const nowY = now.getFullYear();
+                const nowM = now.getMonth();
+
+                // Najdeme nejstarší datum se směnou
+                let earliestY = nowY;
+                let earliestM = nowM;
+                let hasAnyShift = false;
+
+                if (shifts && typeof shifts === 'object') {
+                    Object.keys(shifts).forEach(key => {
+                        if (key.length >= 7 && shifts[key]) {
+                            const [sY, sM] = key.split('-').map(Number);
+                            if (sY && sM) {
+                                hasAnyShift = true;
+                                if (sY < earliestY || (sY === earliestY && (sM - 1) < earliestM)) {
+                                    earliestY = sY;
+                                    earliestM = sM - 1;
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Pokud je prohlížený měsíc ještě starší než nejstarší směna, zahrneme i ten
+                if (year < earliestY || (year === earliestY && month < earliestM)) {
+                    earliestY = year;
+                    earliestM = month;
+                }
+
+                // Konec rozsahu: minimálně aktuální kalendářní měsíc + 2 měsíce dopředu (nebo aktuálně prohlížený)
+                let latestY = Math.max(nowY, year);
+                let latestM = (latestY === nowY ? Math.max(nowM, month) : month) + 2;
+                if (latestM > 11) {
+                    latestY += Math.floor(latestM / 12);
+                    latestM = latestM % 12;
+                }
+
+                const list = [];
+                let curY = earliestY;
+                let curM = earliestM;
+
+                while (curY < latestY || (curY === latestY && curM <= latestM)) {
+                    // Spočítáme počet směn v daném měsíci pro štítek
+                    const prefix = `${curY}-${String(curM + 1).padStart(2, '0')}`;
+                    let shiftCount = 0;
+                    if (shifts && typeof shifts === 'object') {
+                        Object.keys(shifts).forEach(k => {
+                            if (k.startsWith(prefix) && shifts[k]) shiftCount++;
+                        });
+                    }
+
+                    const dObj = new Date(curY, curM, 1);
+                    const label = new Intl.DateTimeFormat('cs-CZ', { month: 'long', year: 'numeric' }).format(dObj);
+                    const isSelected = curY === year && curM === month;
+                    const isCurrent = curY === nowY && curM === nowM;
+
+                    list.push({
+                        year: curY,
+                        month: curM,
+                        date: dObj,
+                        label,
+                        shiftCount,
+                        isSelected,
+                        isCurrent
+                    });
+
+                    curM++;
+                    if (curM > 11) {
+                        curY++;
+                        curM = 0;
+                    }
+                }
+                return list;
+            }, [shifts, year, month]);
+
+            // Zavření popupu při kliknutí mimo
+            useEffect(() => {
+                if (!isSelectorOpen) return;
+                const handleClickOutside = (e) => {
+                    if (selectorRef.current && !selectorRef.current.contains(e.target)) {
+                        setIsSelectorOpen(false);
+                    }
+                };
+                document.addEventListener('mousedown', handleClickOutside);
+                document.addEventListener('touchstart', handleClickOutside);
+                return () => {
+                    document.removeEventListener('mousedown', handleClickOutside);
+                    document.removeEventListener('touchstart', handleClickOutside);
+                };
+            }, [isSelectorOpen]);
+
+            const handleSelectMonth = (mItem) => {
+                setCurrentDate(mItem.date);
+                setIsSelectorOpen(false);
+            };
+
+            return (
+                <div className="relative" ref={selectorRef}>
+                    <div className="flex items-center justify-between bg-white dark:bg-slate-900 px-3 py-2.5 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 shadow-sm">
                         <button 
                             type="button"
-                            onClick={() => setCurrentDate(new Date())}
-                            className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-lg active:scale-90 border border-blue-200 dark:border-blue-900/50 transition-all"
+                            onClick={onPrevMonth ? onPrevMonth : () => setCurrentDate(new Date(year, month - 1, 1))} 
+                            className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-90 transition-all"
+                            title="Předchozí měsíc"
                         >
-                            Dnes
+                            <i className="fa-solid fa-chevron-left text-sm"></i>
                         </button>
+                        
+                        <div className="flex items-center gap-2">
+                            {/* Klikací název měsíce s indikátorem výběru */}
+                            <button
+                                type="button"
+                                onClick={() => setIsSelectorOpen(!isSelectorOpen)}
+                                className="group flex items-center gap-1.5 px-2.5 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/80 active:scale-95 transition-all cursor-pointer"
+                                title="Kliknutím vyberete měsíc ze seznamu"
+                            >
+                                <span className="font-extrabold text-sm uppercase tracking-wide text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                    {new Intl.DateTimeFormat('cs-CZ', { month: 'long', year: 'numeric' }).format(currentDate)}
+                                </span>
+                                <i className={`fa-solid fa-chevron-down text-[10px] text-slate-400 group-hover:text-blue-500 transition-transform duration-200 ${isSelectorOpen ? 'rotate-180 text-blue-600' : ''}`}></i>
+                            </button>
+
+                            {!isViewingCurrentMonth && (
+                                <button 
+                                    type="button"
+                                    onClick={() => setCurrentDate(new Date())}
+                                    className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-lg active:scale-90 border border-blue-200 dark:border-blue-900/50 transition-all"
+                                >
+                                    Dnes
+                                </button>
+                            )}
+                        </div>
+
+                        <button 
+                            type="button"
+                            onClick={onNextMonth ? onNextMonth : () => setCurrentDate(new Date(year, month + 1, 1))} 
+                            className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-90 transition-all"
+                            title="Následující měsíc"
+                        >
+                            <i className="fa-solid fa-chevron-right text-sm"></i>
+                        </button>
+                    </div>
+
+                    {/* Vyskakovací menu / výběr měsíců */}
+                    {isSelectorOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xl p-2 animate-fade-in max-h-72 overflow-y-auto overscroll-contain">
+                            <div className="px-3 py-1.5 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 mb-1">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                    Vyberte měsíc (od prvního aktivního)
+                                </span>
+                                <button 
+                                    type="button"
+                                    onClick={() => setIsSelectorOpen(false)}
+                                    className="w-5 h-5 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
+                                >
+                                    <i className="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                            <div className="space-y-1">
+                                {availableMonths.map((mItem) => (
+                                    <button
+                                        key={`${mItem.year}-${mItem.month}`}
+                                        type="button"
+                                        onClick={() => handleSelectMonth(mItem)}
+                                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all text-left active:scale-[0.98] ${
+                                            mItem.isSelected
+                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/70'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="capitalize">{mItem.label}</span>
+                                            {mItem.isCurrent && (
+                                                <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wider ${
+                                                    mItem.isSelected 
+                                                        ? 'bg-white/20 text-white' 
+                                                        : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
+                                                }`}>
+                                                    Aktuální
+                                                </span>
+                                            )}
+                                        </div>
+                                        {mItem.shiftCount > 0 ? (
+                                            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${
+                                                mItem.isSelected
+                                                    ? 'bg-white/20 text-white font-black'
+                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 font-semibold'
+                                            }`}>
+                                                {mItem.shiftCount} {mItem.shiftCount === 1 ? 'směna' : (mItem.shiftCount < 5 ? 'směny' : 'směn')}
+                                            </span>
+                                        ) : (
+                                            <span className={`text-[10px] ${mItem.isSelected ? 'text-white/60' : 'text-slate-400 font-normal'}`}>
+                                                bez směn
+                                            </span>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     )}
                 </div>
-
-                <button 
-                    type="button"
-                    onClick={onNextMonth ? onNextMonth : () => setCurrentDate(new Date(year, month + 1, 1))} 
-                    className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-90 transition-all"
-                    title="Následující měsíc"
-                >
-                    <i className="fa-solid fa-chevron-right text-sm"></i>
-                </button>
-            </div>
-        );
+            );
+        };
 
         // --- Shared Off-Day Row Component ---
         const OffDayRow = ({ dateStr, isItemToday, holidays, month, onOpenEditor, rowId }) => {
@@ -2746,6 +2920,7 @@
                                 setCurrentDate={setCurrentDate}
                                 onPrevMonth={goToPreviousMonth}
                                 onNextMonth={goToNextMonth}
+                                shifts={shifts}
                             />
                         </div>
                     )}
